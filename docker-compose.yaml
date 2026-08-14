@@ -10,6 +10,7 @@ services:
     environment:
       - ASPNETCORE_ENVIRONMENT=Production
       - ASPNETCORE_URLS=http://+:80
+      - ASPNETCORE_FORWARDEDHEADERS_ENABLED=true
       - DB_HOST=simpldb
       - DB_USER=postgres
       - PGPASSWORD=EcYVW5Y6fAll62opS3CTgvK0hdZrVunc
