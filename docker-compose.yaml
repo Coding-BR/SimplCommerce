@@ -18,7 +18,7 @@ services:
       - "5000:5000"
     networks:
       - default
-      - coolify
+      - coolify-proxy
     labels:
       - "coolify.managed=true"
       - "traefik.enable=true"
@@ -49,7 +49,7 @@ services:
 
 networks:
   default:
-  coolify:
+  coolify-proxy:
     external: true
 
 volumes:
