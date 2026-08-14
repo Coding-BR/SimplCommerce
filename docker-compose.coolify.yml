@@ -16,6 +16,12 @@ services:
       - ConnectionStrings__DefaultConnection=User ID=postgres;Password=EcYVW5Y6fAll62opS3CTgvK0hdZrVunc;Host=simpldb;Port=5432;Database=simplcommerce;Pooling=true;
     ports:
       - "5000:5000"
+    labels:
+      - "coolify.managed=true"
+      - "traefik.enable=true"
+      - "traefik.http.routers.simplcommerce.rule=Host(`www.idealcreative.com.br`)"
+      - "traefik.http.routers.simplcommerce.entrypoints=http,https"
+      - "traefik.http.services.simplcommerce.loadbalancer.server.port=5000"
     depends_on:
       simpldb:
         condition: service_healthy
