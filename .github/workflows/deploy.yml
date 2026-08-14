@@ -1,4 +1,4 @@
-name: Build and Deploy SimplCommerce to Coolify (Oracle ARM64)
+name: Build and Deploy SimplCommerce
 
 on:
   push:
@@ -6,10 +6,6 @@ on:
       - main
       - master
   workflow_dispatch:
-
-env:
-  REGISTRY: ghcr.io
-  IMAGE_NAME: ${{ github.repository }}
 
 jobs:
   build-and-push:
@@ -22,7 +18,7 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Set up QEMU (for ARM64 support)
+      - name: Set up QEMU
         uses: docker/setup-qemu-action@v3
 
       - name: Set up Docker Buildx
@@ -31,7 +27,7 @@ jobs:
       - name: Log in to GitHub Container Registry
         uses: docker/login-action@v3
         with:
-          registry: ${{ env.REGISTRY }}
+          registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
@@ -39,7 +35,7 @@ jobs:
         id: meta
         uses: docker/metadata-action@v5
         with:
-          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          images: ghcr.io/coding-br/simplcommerce
           tags: |
             type=raw,value=latest
             type=sha,format=short
@@ -59,5 +55,5 @@ jobs:
       - name: Trigger Coolify Deployment Webhook
         if: ${{ secrets.COOLIFY_DEPLOY_WEBHOOK != '' }}
         run: |
-          echo "Disparando Webhook de Deploy no Coolify..."
+          echo "Disparando Webhook no Coolify..."
           curl -X GET "${{ secrets.COOLIFY_DEPLOY_WEBHOOK }}" || true
