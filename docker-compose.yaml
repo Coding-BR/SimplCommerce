@@ -1,0 +1,41 @@
+version: '3.8'
+
+services:
+  web:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: simplcommerce-web
+    restart: always
+    environment:
+      - ASPNETCORE_ENVIRONMENT=Production
+      - ASPNETCORE_URLS=http://+:5000
+      - DB_HOST=simpldb
+      - DB_USER=postgres
+      - PGPASSWORD=EcYVW5Y6fAll62opS3CTgvK0hdZrVunc
+      - ConnectionStrings__DefaultConnection=User ID=postgres;Password=EcYVW5Y6fAll62opS3CTgvK0hdZrVunc;Host=simpldb;Port=5432;Database=simplcommerce;Pooling=true;
+    ports:
+      - "5000:5000"
+    depends_on:
+      simpldb:
+        condition: service_healthy
+
+  simpldb:
+    image: postgres:16-alpine
+    container_name: simplcommerce-db
+    restart: always
+    environment:
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=EcYVW5Y6fAll62opS3CTgvK0hdZrVunc
+      - POSTGRES_DB=postgres
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  postgres_data:
+
