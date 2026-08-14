@@ -9,21 +9,13 @@ services:
     restart: always
     environment:
       - ASPNETCORE_ENVIRONMENT=Production
-      - ASPNETCORE_URLS=http://+:5000
+      - ASPNETCORE_URLS=http://+:80
       - DB_HOST=simpldb
       - DB_USER=postgres
       - PGPASSWORD=EcYVW5Y6fAll62opS3CTgvK0hdZrVunc
       - ConnectionStrings__DefaultConnection=User ID=postgres;Password=EcYVW5Y6fAll62opS3CTgvK0hdZrVunc;Host=simpldb;Port=5432;Database=simplcommerce;Pooling=true;
     ports:
-      - "5000:5000"
-    labels:
-      - "traefik.enable=true"
-      - "traefik.http.routers.web-yc15zqjo85du20ujegy9brxp.rule=Host(`www.idealcreative.com.br`)"
-      - "traefik.http.routers.web-yc15zqjo85du20ujegy9brxp.entrypoints=web,websecure"
-      - "traefik.http.services.web-yc15zqjo85du20ujegy9brxp.loadbalancer.server.port=5000"
-    networks:
-      - default
-      - coolify-proxy
+      - "5000:80"
     depends_on:
       simpldb:
         condition: service_healthy
@@ -43,10 +35,6 @@ services:
       interval: 5s
       timeout: 5s
       retries: 5
-
-networks:
-  coolify-proxy:
-    external: true
 
 volumes:
   postgres_data:
