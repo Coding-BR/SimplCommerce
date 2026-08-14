@@ -53,7 +53,9 @@ jobs:
           cache-to: type=gha,mode=max
 
       - name: Trigger Coolify Deployment Webhook
-        if: ${{ secrets.COOLIFY_DEPLOY_WEBHOOK != '' }}
+        env:
+          COOLIFY_DEPLOY_WEBHOOK: ${{ secrets.COOLIFY_DEPLOY_WEBHOOK }}
+        if: ${{ env.COOLIFY_DEPLOY_WEBHOOK != '' }}
         run: |
           echo "Disparando Webhook no Coolify..."
-          curl -X GET "${{ secrets.COOLIFY_DEPLOY_WEBHOOK }}" || true
+          curl -X GET "$COOLIFY_DEPLOY_WEBHOOK" || true
