@@ -16,12 +16,15 @@ services:
       - ConnectionStrings__DefaultConnection=User ID=postgres;Password=EcYVW5Y6fAll62opS3CTgvK0hdZrVunc;Host=simpldb;Port=5432;Database=simplcommerce;Pooling=true;
     ports:
       - "5000:5000"
+    networks:
+      - default
+      - coolify
     labels:
       - "coolify.managed=true"
       - "traefik.enable=true"
-      - "traefik.http.routers.simplcommerce.rule=Host(`www.idealcreative.com.br`)"
-      - "traefik.http.routers.simplcommerce.entrypoints=http,https"
-      - "traefik.http.services.simplcommerce.loadbalancer.server.port=5000"
+      - "traefik.http.routers.simplcommerce-web.rule=Host(`www.idealcreative.com.br`)"
+      - "traefik.http.routers.simplcommerce-web.entrypoints=http,https"
+      - "traefik.http.services.simplcommerce-web.loadbalancer.server.port=5000"
     depends_on:
       simpldb:
         condition: service_healthy
@@ -36,11 +39,18 @@ services:
       - POSTGRES_DB=postgres
     volumes:
       - postgres_data:/var/lib/postgresql/data
+    networks:
+      - default
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U postgres"]
       interval: 5s
       timeout: 5s
       retries: 5
+
+networks:
+  default:
+  coolify:
+    external: true
 
 volumes:
   postgres_data:
