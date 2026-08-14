@@ -2,7 +2,9 @@ version: '3.8'
 
 services:
   web:
-    image: ghcr.io/coding-br/simplcommerce:latest
+    build:
+      context: .
+      dockerfile: Dockerfile
     container_name: simplcommerce-web
     restart: always
     environment:
