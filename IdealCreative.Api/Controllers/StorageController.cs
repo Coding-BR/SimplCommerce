@@ -114,7 +114,8 @@ public sealed class StorageController(IntegrationSettingsStore integrations, ISt
         await foreach (var item in minio.ListObjectsEnumAsync(new ListObjectsArgs().WithBucket(bucket).WithPrefix(prefix).WithRecursive(false), ct))
         {
             var key = item.Key;
-            var cleanKey = key.TrimEnd('/');
+            var unescapedKey = Uri.UnescapeDataString(key);
+            var cleanKey = unescapedKey.TrimEnd('/');
             if (string.IsNullOrWhiteSpace(cleanKey) || cleanKey.Equals(prefix.TrimEnd('/'), StringComparison.OrdinalIgnoreCase))
                 continue;
 

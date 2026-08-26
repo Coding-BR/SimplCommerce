@@ -290,14 +290,14 @@
         var crumbs = new List<(string Name, string Path)>();
         if (string.IsNullOrEmpty(currentPath)) return crumbs;
 
-        var parts = currentPath.Split('/', StringSplitOptions.RemoveEmptyEntries);
+        var unescaped = Uri.UnescapeDataString(currentPath).TrimEnd('/');
+        var parts = unescaped.Split('/', StringSplitOptions.RemoveEmptyEntries);
         var builtPath = "";
         
         foreach (var part in parts)
         {
-            var cleanPart = Uri.UnescapeDataString(part).TrimEnd('/');
-            builtPath += cleanPart + "/";
-            crumbs.Add((cleanPart, builtPath));
+            builtPath += part + "/";
+            crumbs.Add((part, builtPath));
         }
         
         return crumbs;
@@ -306,9 +306,9 @@
     private static string CleanName(string rawName)
     {
         if (string.IsNullOrWhiteSpace(rawName)) return "";
-        var name = Uri.UnescapeDataString(rawName).TrimEnd('/');
-        var idx = name.LastIndexOf('/');
-        return idx >= 0 ? name[(idx + 1)..] : name;
+        var unescaped = Uri.UnescapeDataString(rawName).TrimEnd('/');
+        var idx = unescaped.LastIndexOf('/');
+        return idx >= 0 ? unescaped[(idx + 1)..] : unescaped;
     }
 
     private static bool IsImageFile(string fileName)
