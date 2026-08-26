@@ -447,7 +447,7 @@
                                                         }
                                                         else
                                                         {
-                                                            <InputFile OnChange="HandleDigitalFileSelected" class="form-control" accept=".zip,.rar,.7z,.stl,.dxf,.cdr,.pdf,.svg,.obj,.3mf" />
+                                                            <InputFile @key="@("digital_file_input")" OnChange="HandleDigitalFileSelected" class="form-control" accept=".zip,.rar,.7z,.stl,.dxf,.cdr,.pdf,.svg,.obj,.3mf" />
                                                             <small class="text-muted d-block mt-2">Formatos aceitos: .ZIP, .RAR, .7Z, .STL, .DXF, .CDR, .PDF, .SVG, .OBJ, .3MF (máx. 250MB)</small>
                                                             @if (!string.IsNullOrEmpty(digitalFileError))
                                                             {
@@ -1004,23 +1004,45 @@
                 return;
             }
 
+            // CRITICAL BLAZOR WEBASSEMBLY FIX:
+            // Read file stream INTO MEMORY IMMEDIATELY before ANY StateHasChanged call!
+            // This prevents Blazor WASM from nullifying _blazorFilesById in JS interop.
+            byte[] fileBytes;
+            try
+            {
+                Console.WriteLine("Iniciando leitura do arquivo digital em memória...");
+                using var stream = file.OpenReadStream(maxAllowedSize: maxFileSize);
+                using var ms = new MemoryStream();
+                await stream.CopyToAsync(ms);
+                fileBytes = ms.ToArray();
+                Console.WriteLine($"Leitura em memória concluída: {fileBytes.Length} bytes.");
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Erro ao ler stream em memória: {ex.Message}");
+                digitalFileError = $"Erro ao carregar o arquivo: {ex.Message}";
+                StateHasChanged();
+                return;
+            }
+
             isUploadingDigital = true;
-            digitalUploadProgress = 0;
+            digitalUploadProgress = 10;
             StateHasChanged();
             
             try
             {
-                Console.WriteLine("Iniciando upload do arquivo digital via stream...");
-                var (result, error) = await ProductService.UploadDigitalFileAsync(file, (progress) =>
+                Console.WriteLine("Iniciando upload para o servidor...");
+                var (result, error) = await ProductService.UploadDigitalFileFromBytesAsync(fileBytes, file.Name, (progress) =>
                 {
-                    digitalUploadProgress = progress;
+                    digitalUploadProgress = Math.Max(10, progress);
                     InvokeAsync(StateHasChanged);
                 });
                 
-                if (result != null && !string.IsNullOrEmpty(result.FilePath))
+                if (result != null && (!string.IsNullOrEmpty(result.FilePath) || !string.IsNullOrEmpty(result.Url)))
                 {
-                    Console.WriteLine($"Upload do arquivo digital concluído: {result.FilePath}");
-                    product.DigitalFilePath = result.FilePath;
+                    var path = !string.IsNullOrEmpty(result.FilePath) ? result.FilePath : result.Url!;
+                    Console.WriteLine($"Upload do arquivo digital concluído: {path}");
+                    product.DigitalFilePath = path;
                     Snackbar.Add($"Arquivo \"{file.Name}\" anexado com sucesso!", Severity.Success);
                 }
                 else

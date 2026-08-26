@@ -574,21 +574,36 @@ public class ProductService : IProductService
     {
         try
         {
-            onProgress?.Invoke(0);
+            onProgress?.Invoke(20);
             using var form = new MultipartFormDataContent();
             using var bytes = new ByteArrayContent(fileBytes);
-            bytes.Headers.ContentType = new MediaTypeHeaderValue("application/zip");
+            var ext = Path.GetExtension(fileName).ToLowerInvariant();
+            var contentType = ext switch
+            {
+                ".zip" => "application/zip",
+                ".rar" => "application/vnd.rar",
+                ".7z" => "application/x-7z-compressed",
+                ".pdf" => "application/pdf",
+                _ => "application/octet-stream"
+            };
+            bytes.Headers.ContentType = new MediaTypeHeaderValue(contentType);
             form.Add(bytes, "file", fileName);
-            onProgress?.Invoke(20);
+            onProgress?.Invoke(50);
             var response = await AuthClient.PostAsync("api/upload/digital-file", form);
-            if (!response.IsSuccessStatusCode) return (null, $"Falha no upload: {response.StatusCode}. {await response.Content.ReadAsStringAsync()}");
+            onProgress?.Invoke(90);
+            if (!response.IsSuccessStatusCode)
+            {
+                var errStr = await response.Content.ReadAsStringAsync();
+                return (null, $"Falha ({response.StatusCode}): {ExtractUploadError(errStr)}");
+            }
             onProgress?.Invoke(100);
-            return (await response.Content.ReadFromJsonAsync<DigitalFileUploadResponse>(), null);
+            var res = await response.Content.ReadFromJsonAsync<DigitalFileUploadResponse>();
+            return (res, null);
         }
         catch (Exception ex)
         {
-            Console.WriteLine($"Error uploading digital file: {ex.Message}");
-            return (null, $"Erro de conexão: {ex.Message}");
+            Console.WriteLine($"Error uploading digital file from bytes: {ex.Message}");
+            return (null, ex.Message);
         }
     }
 
