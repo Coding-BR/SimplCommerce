@@ -111,7 +111,8 @@ public sealed class StorageController(IntegrationSettingsStore integrations, ISt
         if (!await minio.BucketExistsAsync(new BucketExistsArgs().WithBucket(bucket), ct)) return Ok(new { currentPath = prefix, items = Array.Empty<object>(), totalItems = 0, pageSize, continuationToken = (string?)null, hasMore = false });
 
         var rows = new List<StorageItem>();
-        await foreach (var item in minio.ListObjectsEnumAsync(new ListObjectsArgs().WithBucket(bucket).WithPrefix(prefix).WithRecursive(false), ct))
+        var isSearch = !string.IsNullOrWhiteSpace(search);
+        await foreach (var item in minio.ListObjectsEnumAsync(new ListObjectsArgs().WithBucket(bucket).WithPrefix(prefix).WithRecursive(isSearch), ct))
         {
             var key = item.Key;
             var unescapedKey = Uri.UnescapeDataString(key);
@@ -120,9 +121,9 @@ public sealed class StorageController(IntegrationSettingsStore integrations, ISt
                 continue;
 
             var name = cleanKey.Split('/').LastOrDefault() ?? cleanKey;
-            var isFolder = item.IsDir || key.EndsWith('/') || (item.Size == 0 && !name.Contains('.'));
+            var isFolder = !isSearch && (item.IsDir || key.EndsWith('/') || (item.Size == 0 && !name.Contains('.')));
 
-            if (!string.IsNullOrWhiteSpace(search) && !name.Contains(search.Trim(), StringComparison.OrdinalIgnoreCase))
+            if (isSearch && !name.Contains(search.Trim(), StringComparison.OrdinalIgnoreCase) && !key.Contains(search.Trim(), StringComparison.OrdinalIgnoreCase))
                 continue;
 
             var targetKey = isFolder ? cleanKey + "/" : key;
