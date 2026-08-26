@@ -1,3 +1,4 @@
+@using System.Text.Json.Serialization
 @using BlazorClient.Core.Interfaces
 @page "/admin/products/new"
 @page "/admin/products/edit/{Id}"
@@ -5,6 +6,7 @@
 @using BlazorClient.Core.Services
 @using BlazorClient.Components
 @inject IProductService ProductService
+@inject IAuthService AuthService
 @inject NavigationManager Navigation
 @inject IJSRuntime JSRuntime
 @inject ILocalizationService L
@@ -447,7 +449,7 @@
                                                         }
                                                         else
                                                         {
-                                                            <InputFile @key="@("digital_file_input")" OnChange="HandleDigitalFileSelected" class="form-control" accept=".zip,.rar,.7z,.stl,.dxf,.cdr,.pdf,.svg,.obj,.3mf" />
+                                                            <input @ref="digitalFileInputRef" @onchange="HandleDigitalFileSelectedDirect" type="file" class="form-control" accept=".zip,.rar,.7z,.stl,.dxf,.cdr,.pdf,.svg,.obj,.3mf" />
                                                             <small class="text-muted d-block mt-2">Formatos aceitos: .ZIP, .RAR, .7Z, .STL, .DXF, .CDR, .PDF, .SVG, .OBJ, .3MF (máx. 250MB)</small>
                                                             @if (!string.IsNullOrEmpty(digitalFileError))
                                                             {
@@ -977,6 +979,62 @@
         }
     }
     
+    private ElementReference digitalFileInputRef;
+
+    private async Task HandleDigitalFileSelectedDirect()
+    {
+        digitalFileError = string.Empty;
+        isUploadingDigital = true;
+        digitalUploadProgress = 20;
+        StateHasChanged();
+
+        try
+        {
+            var token = await AuthService.GetCurrentUserToken();
+            var result = await JSRuntime.InvokeAsync<JsUploadResult>("uploadDigitalFileDirectly", digitalFileInputRef, "api/upload/digital-file", token);
+            
+            if (result != null && result.Success && !string.IsNullOrEmpty(result.FilePath))
+            {
+                Console.WriteLine($"Upload direto concluído com sucesso: {result.FilePath}");
+                product.DigitalFilePath = result.FilePath;
+                Snackbar.Add($"Arquivo \"{result.FileName ?? "digital"}\" anexado com sucesso!", Severity.Success);
+            }
+            else
+            {
+                digitalFileError = result?.Error ?? "Erro ao enviar o arquivo digital. Confirme o tamanho/formato e tente novamente.";
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Erro no upload direto JS: {ex.Message}");
+            digitalFileError = $"Erro de upload: {ex.Message}";
+        }
+        finally
+        {
+            isUploadingDigital = false;
+            digitalUploadProgress = 0;
+            StateHasChanged();
+        }
+    }
+
+    public class JsUploadResult
+    {
+        [JsonPropertyName("success")]
+        public bool Success { get; set; }
+
+        [JsonPropertyName("filePath")]
+        public string? FilePath { get; set; }
+
+        [JsonPropertyName("fileName")]
+        public string? FileName { get; set; }
+
+        [JsonPropertyName("fileSize")]
+        public long FileSize { get; set; }
+
+        [JsonPropertyName("error")]
+        public string? Error { get; set; }
+    }
+
     private async Task HandleDigitalFileSelected(InputFileChangeEventArgs e)
     {
         digitalFileError = string.Empty;
