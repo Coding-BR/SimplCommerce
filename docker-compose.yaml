@@ -29,8 +29,8 @@ services:
       - ConnectionStrings__DefaultConnection=Host=postgres;Port=5432;Database=idealcreative;Username=postgres;Password=EcYVW5Y6fAll62opS3CTgvK0hdZrVunc;Pooling=true;
       - Jwt__Issuer=https://www.idealcreative.com.br
       - Jwt__Key=IdealCreative-Production-Secret-Jwt-Key-2026-ARM64!
-      - Admin__Email=admin@idealcreative.com.br
-      - Admin__Password=IdealCreative#2026
+      - Admin__Email=adrianojr59@gmail.com
+      - Admin__Password=Vacation95
       - Storage__Endpoint=minio:9000
       - Storage__AccessKey=idealcreative
       - Storage__SecretKey=EcYVW5Y6fAll62opS3CTgvK0hdZrVunc
