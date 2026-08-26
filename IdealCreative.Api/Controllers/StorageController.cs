@@ -23,6 +23,16 @@ public sealed class StorageController(IntegrationSettingsStore integrations, ISt
     public Task<IActionResult> DigitalFile(IFormFile file, CancellationToken ct)
         => IsSafeDigitalFile(file) ? Upload(file, "products/digital", ct) : Task.FromResult<IActionResult>(BadRequest(new { message = "Envie um arquivo ZIP válido." }));
 
+    [HttpPost("/api/storage/upload")]
+    [Authorize(Roles = "Admin")]
+    [RequestSizeLimit(100 * 1024 * 1024)]
+    public async Task<IActionResult> DirectUpload(IFormFile file, [FromQuery] string? path, CancellationToken ct)
+    {
+        var prefix = NormalizePath(path, allowEmpty: true) ?? "";
+        prefix = prefix.TrimEnd('/');
+        return await Upload(file, string.IsNullOrEmpty(prefix) ? "uploads" : prefix, ct);
+    }
+
     [HttpDelete("product-image")]
     [Authorize(Roles = "Admin")]
     public Task<IActionResult> DeleteImage([FromQuery] string? path, [FromQuery] string? url, CancellationToken ct) => DeleteObject(ResolveObjectPath(path, url), ct);

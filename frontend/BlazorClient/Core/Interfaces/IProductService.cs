@@ -35,6 +35,7 @@ public interface IProductService
     Task<B2BrowserResponse?> BrowseFilesAsync(string path = "", int pageSize = 10, string? continuationToken = null, string? search = null);
     Task<string?> GetB2DownloadUrlAsync(string path);
     Task<bool> DeleteB2FileAsync(string path);
+    Task<bool> UploadFileToPathAsync(Microsoft.AspNetCore.Components.Forms.IBrowserFile file, string targetPath = "");
     
     /// <summary>
     /// Busca índice de produtos leve para busca local.

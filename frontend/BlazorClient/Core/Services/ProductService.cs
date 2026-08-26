@@ -732,6 +732,27 @@ public class ProductService : IProductService
         }
     }
 
+    public async Task<bool> UploadFileToPathAsync(Microsoft.AspNetCore.Components.Forms.IBrowserFile file, string targetPath = "")
+    {
+        try
+        {
+            using var content = new MultipartFormDataContent();
+            const long maxFileSize = 100 * 1024 * 1024;
+            using var stream = file.OpenReadStream(maxAllowedSize: maxFileSize);
+            var fileContent = new StreamContent(stream);
+            fileContent.Headers.ContentType = new System.Net.Http.Headers.MediaTypeHeaderValue(string.IsNullOrEmpty(file.ContentType) ? "application/octet-stream" : file.ContentType);
+            content.Add(fileContent, "file", file.Name);
+
+            var response = await AuthClient.PostAsync($"api/storage/upload?path={Uri.EscapeDataString(targetPath)}", content);
+            return response.IsSuccessStatusCode;
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error uploading file to path: {ex.Message}");
+            return false;
+        }
+    }
+
     private class DownloadUrlResponse { public string Url { get; set; } = ""; }
 
     public async Task<List<ProductSearchIndexDto>> GetSearchIndexAsync(string? currency = null, string? language = null)
