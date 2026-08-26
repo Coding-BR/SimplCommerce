@@ -295,8 +295,9 @@
         
         foreach (var part in parts)
         {
-            builtPath += part + "/";
-            crumbs.Add((part, builtPath));
+            var cleanPart = Uri.UnescapeDataString(part).TrimEnd('/');
+            builtPath += cleanPart + "/";
+            crumbs.Add((cleanPart, builtPath));
         }
         
         return crumbs;
@@ -305,7 +306,7 @@
     private static string CleanName(string rawName)
     {
         if (string.IsNullOrWhiteSpace(rawName)) return "";
-        var name = rawName.TrimEnd('/');
+        var name = Uri.UnescapeDataString(rawName).TrimEnd('/');
         var idx = name.LastIndexOf('/');
         return idx >= 0 ? name[(idx + 1)..] : name;
     }

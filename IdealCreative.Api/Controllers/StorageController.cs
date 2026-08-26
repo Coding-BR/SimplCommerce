@@ -102,22 +102,32 @@ public sealed class StorageController(IntegrationSettingsStore integrations, ISt
 
     [HttpGet("/api/storage/browser")]
     [Authorize(Roles = "Admin")]
-    public async Task<IActionResult> Browse([FromQuery] string? path = null, [FromQuery] int pageSize = 20, [FromQuery] string? continuationToken = null, [FromQuery] string? search = null, CancellationToken ct = default)
+    public async Task<IActionResult> Browse([FromQuery] string? path = null, [FromQuery] int pageSize = 50, [FromQuery] string? continuationToken = null, [FromQuery] string? search = null, CancellationToken ct = default)
     {
         var (minio, storage) = await ClientAsync(ct); var bucket = storage.Bucket;
-        var prefix = NormalizePath(path, allowEmpty: true);
-        if (prefix is null) return BadRequest(new { message = "Caminho inválido." });
+        var prefix = NormalizePath(path, allowEmpty: true) ?? "";
+        if (!string.IsNullOrEmpty(prefix) && !prefix.EndsWith('/')) prefix += "/";
         pageSize = Math.Clamp(pageSize, 1, 100);
         if (!await minio.BucketExistsAsync(new BucketExistsArgs().WithBucket(bucket), ct)) return Ok(new { currentPath = prefix, items = Array.Empty<object>(), totalItems = 0, pageSize, continuationToken = (string?)null, hasMore = false });
 
         var rows = new List<StorageItem>();
         await foreach (var item in minio.ListObjectsEnumAsync(new ListObjectsArgs().WithBucket(bucket).WithPrefix(prefix).WithRecursive(false), ct))
         {
-            var name = item.Key.TrimEnd('/').Split('/').LastOrDefault() ?? item.Key;
-            if (!string.IsNullOrWhiteSpace(search) && !name.Contains(search.Trim(), StringComparison.OrdinalIgnoreCase)) continue;
-            rows.Add(new StorageItem(name, item.Key, item.IsDir, Convert.ToInt64(item.Size), null));
+            var key = item.Key;
+            var cleanKey = key.TrimEnd('/');
+            if (string.IsNullOrWhiteSpace(cleanKey) || cleanKey.Equals(prefix.TrimEnd('/'), StringComparison.OrdinalIgnoreCase))
+                continue;
+
+            var name = cleanKey.Split('/').LastOrDefault() ?? cleanKey;
+            var isFolder = item.IsDir || key.EndsWith('/') || (item.Size == 0 && !name.Contains('.'));
+
+            if (!string.IsNullOrWhiteSpace(search) && !name.Contains(search.Trim(), StringComparison.OrdinalIgnoreCase))
+                continue;
+
+            var targetKey = isFolder ? cleanKey + "/" : key;
+            rows.Add(new StorageItem(name, targetKey, isFolder, Convert.ToInt64(item.Size), null));
         }
-        rows = rows.OrderByDescending(item => item.IsFolder).ThenBy(item => item.Name, StringComparer.OrdinalIgnoreCase).ToList();
+        rows = rows.GroupBy(i => i.Key).Select(g => g.First()).OrderByDescending(item => item.IsFolder).ThenBy(item => item.Name, StringComparer.OrdinalIgnoreCase).ToList();
         if (!string.IsNullOrWhiteSpace(continuationToken)) rows = rows.SkipWhile(item => item.Key != continuationToken).Skip(1).ToList();
         var page = rows.Take(pageSize + 1).ToList(); var hasMore = page.Count > pageSize; if (hasMore) page.RemoveAt(page.Count - 1);
         return Ok(new { currentPath = prefix, items = page, totalItems = rows.Count, pageSize, continuationToken = hasMore ? page.LastOrDefault()?.Key : null, hasMore });
