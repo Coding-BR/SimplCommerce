@@ -392,16 +392,31 @@ public class UpdateTagDto
 }
 
 
-public record UploadImageResponse(string Url, string FileName, string Path);
+public record UploadImageResponse(
+    [property: JsonPropertyName("url")] string Url,
+    [property: JsonPropertyName("fileName")] string FileName,
+    [property: JsonPropertyName("path")] string Path
+);
 
 /// <summary>
 /// Response for digital file upload (ZIP)
 /// </summary>
 public class DigitalFileUploadResponse
 {
+    [JsonPropertyName("filePath")]
     public string FilePath { get; set; } = string.Empty;
+
+    [JsonPropertyName("fileName")]
     public string FileName { get; set; } = string.Empty;
+
+    [JsonPropertyName("fileSize")]
     public long FileSize { get; set; }
+
+    [JsonPropertyName("url")]
+    public string? Url { get; set; }
+
+    [JsonPropertyName("path")]
+    public string? Path { set { if (!string.IsNullOrEmpty(value) && string.IsNullOrEmpty(FilePath)) FilePath = value; } }
 }
 
 /// <summary>
