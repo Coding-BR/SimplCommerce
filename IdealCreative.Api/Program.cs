@@ -40,7 +40,7 @@ if (!string.IsNullOrWhiteSpace(dataProtectionCertificatePath))
 builder.Services.AddIdentityCore<ApplicationUser>(options =>
 {
     options.User.RequireUniqueEmail = true;
-    options.Password.RequiredLength = 15;
+    options.Password.RequiredLength = 8;
     options.Password.RequiredUniqueChars = 1;
     options.Password.RequireDigit = false;
     options.Password.RequireLowercase = false;
