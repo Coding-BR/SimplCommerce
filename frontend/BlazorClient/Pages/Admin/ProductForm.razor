@@ -190,38 +190,45 @@
                                     }
 
                                     <div class="col-md-12 mb-3">
-                                        <div class="card bg-light border-secondary">
-                                            <div class="card-body py-2">
-                                                <h6 class="card-title text-muted mb-3" style="font-size: 0.9rem; font-weight: 600;">
-                                                    <i class="fa fa-file-text-o"></i> @L.Get("Admin.ProductForm.FiscalData")
-                                                </h6>
-                                                <div class="row">
-                                                    <div class="col-md-4 mb-2">
-                                                        <label class="form-label small">@L.Get("Admin.ProductForm.NcmLabel")</label>
-                                                        <InputText class="form-control form-control-sm" @bind-Value="product.Ncm" placeholder="00000000" />
-                                                    </div>
-                                                    <div class="col-md-4 mb-2">
-                                                        <label class="form-label small">@L.Get("Admin.ProductForm.CestLabel")</label>
-                                                        <InputText class="form-control form-control-sm" @bind-Value="product.Cest" />
-                                                    </div>
-                                                    <div class="col-md-4 mb-2">
-                                                        <label class="form-label small">@L.Get("Admin.Common.Origin")</label>
-                                                        <InputSelect class="form-select form-select-sm" @bind-Value="product.Origem">
-                                                            <option value="0">@L.Get("Admin.ProductForm.OriginNational")</option>
-                                                            <option value="1">@L.Get("Admin.ProductForm.OriginForeignDirect")</option>
-                                                            <option value="2">@L.Get("Admin.ProductForm.OriginForeignInternal")</option>
-                                                        </InputSelect>
-                                                    </div>
-                                                    <div class="col-md-6 mb-2">
-                                                        <label class="form-label small">@L.Get("Admin.ProductForm.GtinLabel")</label>
-                                                        <InputText class="form-control form-control-sm" @bind-Value="product.Gtin" placeholder="SEM GTIN" />
-                                                    </div>
-                                                    <div class="col-md-6 mb-2">
-                                                        <label class="form-label small">@L.Get("Admin.Common.CommercialUnit")</label>
-                                                        <InputText class="form-control form-control-sm" @bind-Value="product.Unidade" placeholder="@L.Get("Admin.ProductForm.UnitPlaceholder")" />
+                                        <div class="card border-secondary">
+                                            <div class="card-header py-2 px-3 bg-light d-flex justify-content-between align-items-center" style="cursor:pointer;" @onclick="() => showFiscalData = !showFiscalData">
+                                                <span style="font-size: 0.9rem; font-weight: 600;" class="text-muted">
+                                                    <i class="fa fa-file-text-o me-1"></i> @L.Get("Admin.ProductForm.FiscalData")
+                                                    <span class="badge bg-secondary ms-2" style="font-size: 0.65rem; font-weight: 400;">Opcional</span>
+                                                </span>
+                                                <i class="fa @(showFiscalData ? "fa-chevron-up" : "fa-chevron-down") text-muted" style="font-size: 0.8rem;"></i>
+                                            </div>
+                                            @if (showFiscalData)
+                                            {
+                                                <div class="card-body py-2">
+                                                    <div class="row">
+                                                        <div class="col-md-4 mb-2">
+                                                            <label class="form-label small">@L.Get("Admin.ProductForm.NcmLabel")</label>
+                                                            <InputText class="form-control form-control-sm" @bind-Value="product.Ncm" placeholder="00000000" />
+                                                        </div>
+                                                        <div class="col-md-4 mb-2">
+                                                            <label class="form-label small">@L.Get("Admin.ProductForm.CestLabel")</label>
+                                                            <InputText class="form-control form-control-sm" @bind-Value="product.Cest" />
+                                                        </div>
+                                                        <div class="col-md-4 mb-2">
+                                                            <label class="form-label small">@L.Get("Admin.Common.Origin")</label>
+                                                            <InputSelect class="form-select form-select-sm" @bind-Value="product.Origem">
+                                                                <option value="0">@L.Get("Admin.ProductForm.OriginNational")</option>
+                                                                <option value="1">@L.Get("Admin.ProductForm.OriginForeignDirect")</option>
+                                                                <option value="2">@L.Get("Admin.ProductForm.OriginForeignInternal")</option>
+                                                            </InputSelect>
+                                                        </div>
+                                                        <div class="col-md-6 mb-2">
+                                                            <label class="form-label small">@L.Get("Admin.ProductForm.GtinLabel")</label>
+                                                            <InputText class="form-control form-control-sm" @bind-Value="product.Gtin" placeholder="SEM GTIN" />
+                                                        </div>
+                                                        <div class="col-md-6 mb-2">
+                                                            <label class="form-label small">@L.Get("Admin.Common.CommercialUnit")</label>
+                                                            <InputText class="form-control form-control-sm" @bind-Value="product.Unidade" placeholder="@L.Get("Admin.ProductForm.UnitPlaceholder")" />
+                                                        </div>
                                                     </div>
                                                 </div>
-                                            </div>
+                                            }
                                         </div>
                                     </div>
 
@@ -247,20 +254,9 @@
                                                 <option value="@category.Id">@category.GetTranslatedTitle(L.CurrentLanguage)</option>
                                             }
                                         </InputSelect>
-                                    </div>
+                                         </div>
 
-                                    <div class="col-md-12 mb-4">
-                                        <div class="d-flex justify-content-between align-items-center mb-2">
-                                            <h6 class="mb-0 text-primary" style="font-weight: 600;">
-                                                <i class="fa fa-globe"></i> @L.Get("Admin.ProductForm.ContentTranslations")
-                                            </h6>
-                                            <div class="form-check form-switch mb-0">
-                                                <InputCheckbox class="form-check-input" @bind-Value="product.SkipTranslation" id="skipTrans" />
-                                                <label class="form-check-label small" for="skipTrans" title="@L.Get("Admin.ProductForm.SkipTransTooltip")">
-                                                    @L.Get("Admin.ProductForm.SkipTranslation")
-                                                </label>
-                                            </div>
-                                        </div>
+                                     <div class="col-md-12 mb-4">
 
                                         <MudTabs Elevation="0" Outlined="true" ApplyEffectsToContainer="false" Color="Color.Primary" TabHeaderClass="product-admin-tabs" Rounded="true" PanelClass="pt-4 px-1" KeepPanelsAlive="true">
                                             @* Base Language (Portuguese) *@
@@ -748,6 +744,8 @@
     
     // Digital file upload tracking
     private bool isUploadingDigital = false;
+    private bool showFiscalData = false;
+
     private int digitalUploadProgress = 0;
     private string digitalFileError = string.Empty;
     
