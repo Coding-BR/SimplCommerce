@@ -1,0 +1,158 @@
+@page "/admin/reviews"
+@using BlazorClient.Models
+@using BlazorClient.Core.Services
+@inject IReviewService ReviewService
+@inject ISnackbar Snackbar
+@inject IDialogService DialogService
+@inject NavigationManager navManager
+@attribute [Authorize(Roles = "Admin")]
+
+<MudContainer MaxWidth="MaxWidth.ExtraLarge" Class="pa-0 ic-admin-page">
+    <div class="admin-page-header ic-admin-page-heading mb-4"><span class="ic-admin-kicker">COMUNIDADE</span><h1>Avaliações</h1><p>Modere comentários enviados por clientes com compra confirmada.</p></div>
+
+    <MudTable T="ProductReview" @ref="table" ServerData="ServerReload"
+              Dense="false" Hover="true" Striped="false" Bordered="false" Class="ic-admin-mud-table">
+        <ToolBarContent>
+            <MudText Typo="Typo.h6">Avaliações Recentes</MudText>
+            <MudSpacer />
+            <MudTextField T="string" ValueChanged="@((s) => OnSearch(s))" Placeholder="Buscar por ID produto..." Adornment="Adornment.Start"
+                          AdornmentIcon="@Icons.Material.Filled.Search" IconSize="Size.Medium" Class="mt-0"></MudTextField>
+        </ToolBarContent>
+        <HeaderContent>
+            <MudTh>Data</MudTh>
+            <MudTh>Produto</MudTh>
+            <MudTh>Usuário</MudTh>
+            <MudTh>Nota</MudTh>
+            <MudTh>Comentário</MudTh>
+            <MudTh>Visível</MudTh>
+            <MudTh>Ações</MudTh>
+        </HeaderContent>
+        <RowTemplate>
+            <MudTd DataLabel="Data">@context.CreatedAt.ToLocalTime().ToString("g")</MudTd>
+            <MudTd DataLabel="Produto">
+                 <a href="/product/@context.ProductId" target="_blank">@context.ProductId</a>
+            </MudTd>
+            <MudTd DataLabel="Usuário">
+                <MudTooltip Text="@context.UserId">
+                    @context.UserName
+                </MudTooltip>
+            </MudTd>
+            <MudTd DataLabel="Nota">
+                <MudRating ReadOnly="true" SelectedValue="@context.Rating" Size="Size.Small" />
+            </MudTd>
+             <MudTd DataLabel="Comentário">
+                 <MudText Typo="Typo.body2" Style="max-width: 300px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">
+                     @context.Comment
+                 </MudText>
+            </MudTd>
+            <MudTd DataLabel="Visível">
+                <MudSwitch T="bool" Value="@(!context.IsHidden)" Color="Color.Success" 
+                           ValueChanged="@((v) => ToggleVisibility(context, v))" />
+            </MudTd>
+            <MudTd DataLabel="Ações">
+                <MudIconButton Icon="@Icons.Material.Filled.Delete" Size="Size.Small" Color="Color.Error" OnClick="@(() => DeleteReview(context))" />
+            </MudTd>
+        </RowTemplate>
+        <NoRecordsContent>
+            <MudText>Nenhuma avaliação encontrada.</MudText>
+        </NoRecordsContent>
+        <LoadingContent>
+            <MudText>Carregando...</MudText>
+        </LoadingContent>
+        <PagerContent>
+            <MudTablePager />
+        </PagerContent>
+    </MudTable>
+
+</MudContainer>
+
+@code {
+    private MudTable<ProductReview> table = default!;
+    private string searchString = "";
+    // Cursor pagination is handled by the PostgreSQL API.
+    // For simplicity in Admin, we might just load pages linearly or use the PageSize from table.
+    // The API exposes a stable cursor for the current page.
+    // We will implement a simplified "Load Page 0" mostly, or try to map page index to doc id if possible.
+    // The page cursor is retained locally for the table.
+    // we simply RELOAD from start with stricter filters or just handle infinite scroll logic differently.
+    // BUT MudTable expects total count. Our API returns it.
+    
+    // Compatibility pagination with MudTable:
+    // If Page == 0, LastDoc = null.
+    // We only support Next Page correctly if we store the LastDocId of previous pages.
+    private Dictionary<int, string> pageCursors = new Dictionary<int, string>();
+
+    private async Task<TableData<ProductReview>> ServerReload(TableState state, CancellationToken token)
+    {
+        string? lastDocId = null;
+        if (state.Page > 0 && pageCursors.ContainsKey(state.Page - 1))
+        {
+            lastDocId = pageCursors[state.Page - 1];
+        }
+
+        var response = await ReviewService.GetAdminReviews(state.PageSize, lastDocId, string.IsNullOrWhiteSpace(searchString) ? null : searchString);
+
+        if (response == null) return new TableData<ProductReview> { TotalItems = 0, Items = new List<ProductReview>() };
+
+        // Store Next Cursor for the NEXT page
+        if (!string.IsNullOrEmpty(response.Pagination.LastDocId))
+        {
+            if (pageCursors.ContainsKey(state.Page)) pageCursors[state.Page] = response.Pagination.LastDocId;
+            else pageCursors.Add(state.Page, response.Pagination.LastDocId);
+        }
+
+        return new TableData<ProductReview>
+        {
+            TotalItems = response.Pagination.TotalItems,
+            Items = response.Items
+        };
+    }
+
+    private void OnSearch(string text)
+    {
+        searchString = text;
+        pageCursors.Clear(); // Reset cursors on new search
+        table.ReloadServerData();
+    }
+
+    private async Task ToggleVisibility(ProductReview review, bool isVisible)
+    {
+        bool newHiddenState = !isVisible;
+        if (review.IsHidden == newHiddenState) return;
+
+        review.IsHidden = newHiddenState;
+        try 
+        {
+            await ReviewService.UpdateReview(review);
+            Snackbar.Add(newHiddenState ? "Review ocultado (Stats atualizados)" : "Review visível (Stats atualizados)", Severity.Success);
+        }
+        catch
+        {
+             review.IsHidden = !review.IsHidden; // Revert
+             Snackbar.Add("Erro ao atualizar visibilidade", Severity.Error);
+        }
+    }
+
+    private async Task DeleteReview(ProductReview review)
+    {
+        bool? result = await DialogService.ShowMessageBox(
+            "Atenção", 
+            "Excluir este review? As estatísticas do produto (Nota/Total) serão recalculadas para remover este voto.", 
+            yesText: "Excluir", cancelText: "Cancelar");
+
+        if (result == true)
+        {
+            try
+            {
+                await ReviewService.DeleteReview(review.Id);
+                Snackbar.Add("Review excluído e Produto recalculado.", Severity.Success);
+                await table.ReloadServerData();
+            }
+            catch
+            {
+                Snackbar.Add("Erro ao excluir review", Severity.Error);
+            }
+        }
+    }
+
+}

@@ -1,0 +1,58 @@
+.ynex-topbar {
+    background-color: var(--mud-palette-primary);
+    color: white;
+    font-size: 0.75rem;
+}
+
+.ynex-topbar .mud-link {
+    color: white;
+    text-decoration: none;
+    transition: opacity 0.2s;
+}
+
+.ynex-topbar .mud-link:hover {
+    opacity: 0.8;
+    text-decoration: none;
+}
+
+.ynex-appbar {
+    background-color: rgba(255, 255, 255, 0.95) !important;
+    backdrop-filter: blur(8px);
+    color: var(--mud-palette-text-primary) !important;
+}
+
+.ynex-brand-text {
+    letter-spacing: 1px;
+    color: var(--mud-palette-primary);
+}
+
+.ynex-search-bar {
+    width: 300px;
+}
+
+.ynex-divider {
+    height: 24px;
+    width: 1px;
+    background-color: var(--mud-palette-divider);
+}
+
+.ynex-nav-button {
+    font-weight: 500;
+    text-transform: none;
+    letter-spacing: 0.5px;
+}
+
+.ynex-sidebar {
+    background-color: white !important;
+}
+
+.ynex-main-content {
+    background-color: #f0f3f7;
+    min-height: 100vh;
+}
+
+@media (max-width: 959.98px) {
+    .ynex-search-bar {
+        width: 100%;
+    }
+}

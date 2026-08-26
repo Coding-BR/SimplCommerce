@@ -1,0 +1,509 @@
+@using BlazorClient.Core.Services
+@using BlazorClient.Models
+@inject HttpClient HttpClient
+@inject ILocalizationService L
+@inject IProductService ProductService
+@inject IJSRuntime JSRuntime
+
+<div class="tag-picker">
+    <label class="form-label">@L.Get("Admin.Common.TagsLabel")</label>
+    
+    <!-- Selected Tags Display -->
+    @if (selectedTags.Any())
+    {
+        <div class="selected-tags mb-2">
+            @foreach (var tag in selectedTags)
+            {
+                <span class="badge bg-primary me-1 mb-1" 
+                      style="font-size: 0.9rem; padding: 0.4rem 0.6rem; cursor: pointer;"
+                      @onclick="() => StartEditTag(tag)"
+                      title="@L.Get("Admin.ProductForm.ClickToEditTag")">
+                    @GetDisplayTitle(tag)
+                    <button type="button" class="btn-close btn-close-white ms-1" 
+                            style="font-size: 0.6rem; padding: 0;" 
+                            @onclick="() => RemoveTag(tag)"
+                            @onclick:stopPropagation="true"
+                            title="@L.Get("Admin.ProductForm.Remove")"></button>
+                </span>
+            }
+        </div>
+    }
+    
+    <!-- Input with Autocomplete -->
+    <div class="position-relative">
+        <div class="input-group">
+            <input type="text" 
+                   class="form-control" 
+                   @bind="inputValue" 
+                   @bind:event="oninput"
+                   @onkeydown="HandleKeyDown"
+                   @onfocus="() => showSuggestions = true"
+                   placeholder="@L.Get("Admin.ProductForm.TagsPlaceholder")" />
+            <button type="button" class="btn btn-outline-secondary" @onclick="ToggleAllTags" title="@L.Get("Admin.ProductForm.ViewAllTags")">
+                <i class="fa @(showAllTags ? "fa-chevron-up" : "fa-chevron-down")"></i>
+            </button>
+        </div>
+        
+        <!-- Suggestions Dropdown -->
+        @if ((showSuggestions && filteredSuggestions.Any()) || showAllTags)
+        {
+            <div class="tag-suggestions position-absolute w-100 bg-white border rounded shadow-sm mt-1" 
+                 style="max-height: 250px; overflow-y: auto; z-index: 1000;">
+                
+                @{
+                    var displayList = showAllTags ? availableTagObjects : filteredSuggestions;
+                    var sortedList = displayList.OrderBy(t => t.GetTranslatedTitle(L.CurrentLanguage)).ToList();
+                }
+
+                @if (!sortedList.Any())
+                {
+                    <div class="p-3 text-center text-muted">
+                        <i class="fa fa-info-circle"></i> @L.Get("Admin.ProductForm.NoTagsFound")
+                    </div>
+                }
+                else
+                {
+                    @foreach (var suggestion in sortedList)
+                    {
+                        var title = suggestion.Title;
+                        var translatedTitle = suggestion.GetTranslatedTitle(L.CurrentLanguage);
+                        var isSelected = selectedTags.Contains(title);
+                        
+                        <div class="suggestion-item p-2 d-flex justify-content-between align-items-center @(isSelected ? "bg-light border-primary" : "")" 
+                             style="cursor: pointer; border-bottom: 1px solid #eee; transition: background 0.2s;"
+                             @onclick="() => ToggleTag(title)"
+                             title="@(isSelected ? L.Get("Admin.ProductForm.ClickToUnselect") : L.Get("Admin.ProductForm.ClickToSelect"))">
+                            
+                            <div class="flex-grow-1 d-flex align-items-center">
+                                @if (isSelected)
+                                {
+                                    <i class="fa fa-check-circle text-success me-2"></i>
+                                }
+                                else
+                                {
+                                    <i class="fa fa-circle-o text-muted me-2"></i>
+                                }
+                                <span>@translatedTitle</span>
+                            </div>
+                            
+                             <div class="d-flex align-items-center gap-1">
+                                 <span class="badge bg-secondary" style="font-size: 0.7rem;">
+                                    @GetTagCount(title)
+                                </span>
+                                 <button type="button" class="btn btn-link text-primary p-0" 
+                                        style="font-size: 0.9rem; z-index: 10;"
+                                        @onclick="() => StartEditTag(suggestion)" 
+                                        @onclick:stopPropagation="true"
+                                        title="Editar tag e traduções">
+                                    <i class="fa fa-pencil"></i>
+                                </button>
+                                 <button type="button" class="btn btn-link text-danger p-0" 
+                                        style="font-size: 0.9rem; z-index: 10;"
+                                        @onclick="() => DeleteTagFromSystem(title)" 
+                                        @onclick:stopPropagation="true"
+                                        title="Excluir tag do sistema">
+                                    <i class="fa fa-trash"></i>
+                                </button>
+                             </div>
+                        </div>
+                    }
+                }
+                
+                @if (!filteredSuggestions.Any() && !string.IsNullOrWhiteSpace(inputValue) && !showAllTags)
+                {
+                    <div class="p-2 bg-light border-top text-muted small">
+                        <i class="fa fa-plus-circle"></i> @L.Get("Admin.ProductForm.PressEnterToAdd"): "<strong>@inputValue</strong>"
+                    </div>
+                }
+            </div>
+        }
+    </div>
+    
+    <small class="text-muted">
+        <i class="fa fa-info-circle"></i> @L.Get("Admin.ProductForm.TagPickerHelp")
+    </small>
+</div>
+
+@if (showEditTagModal)
+{
+    <div class="modal fade show" tabindex="-1" style="display: block; background-color: rgba(0,0,0,0.5); z-index: 2000;">
+        <div class="modal-dialog modal-sm modal-dialog-centered">
+            <div class="modal-content shadow-lg">
+                <div class="modal-header py-2">
+                    <h6 class="modal-title">Editar Tag</h6>
+                    <button type="button" class="btn-close" @onclick="() => showEditTagModal = false"></button>
+                </div>
+                <div class="modal-body p-3">
+                    <div class="mb-3">
+                        <label class="form-label small">Título (PT-BR)</label>
+                        <input type="text" class="form-control form-control-sm" @bind="tagEditDto.Title" />
+                    </div>
+
+                    <div class="translations-section mt-3">
+                        <label class="form-label small fw-bold mb-2">Traduções Manuais</label>
+                        <div class="d-flex flex-column gap-3 pe-1" style="max-height: 300px; overflow-y: auto;">
+                            @foreach (var lang in SupportedLanguagesList.Where(l => l.Code != "pt-BR"))
+                            {
+                                var langCode = lang.Code;
+                                var trans = GetTagTranslationModel(langCode);
+                                <div>
+                                    <label class="form-label small text-muted mb-1">
+                                        @lang.Flag @lang.Name (@lang.Code)
+                                    </label>
+                                    <div class="input-group input-group-sm">
+                                        <span class="input-group-text bg-light border-end-0">
+                                            <i class="fa fa-language"></i>
+                                        </span>
+                                        <input type="text" class="form-control" 
+                                               @bind="trans.Title" 
+                                               placeholder="@($"Título em {lang.Name}")" />
+                                    </div>
+                                </div>
+                            }
+                        </div>
+                    </div>
+
+                    @if (!string.IsNullOrEmpty(tagEditError))
+                    {
+                        <div class="alert alert-danger py-1 px-2 small mt-2">@tagEditError</div>
+                    }
+                </div>
+                <div class="modal-footer py-1">
+                    <button type="button" class="btn btn-sm btn-secondary" @onclick="() => showEditTagModal = false">Cancelar</button>
+                    <button type="button" class="btn btn-sm btn-primary" @onclick="HandleUpdateTag" disabled="@isSavingTag">
+                        @if (isSavingTag) { <span class="spinner-border spinner-border-sm me-1"></span> }
+                        Salvar
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+<style>
+    .tag-picker .suggestion-item:hover {
+        background-color: #f8f9fa !important;
+    }
+    
+    .tag-picker .btn-close-white {
+        filter: brightness(0) invert(1);
+        opacity: 0.8;
+    }
+    
+    .tag-picker .btn-close-white:hover {
+        opacity: 1;
+    }
+</style>
+
+@code {
+    [Parameter]
+    public string Value { get; set; } = "";
+    
+    [Parameter]
+    public EventCallback<string> ValueChanged { get; set; }
+    
+    private List<string> selectedTags = new();
+    private List<string> availableTags = new();
+    private List<Tag> availableTagObjects = new(); // Stores full tag objects
+    private string inputValue = "";
+    private bool showSuggestions = false;
+    private bool showAllTags = false;
+    private Dictionary<string, int> tagCounts = new();
+    
+    // Edit Tag State
+    private bool showEditTagModal = false;
+    private Tag? tagToEdit = null;
+    private UpdateTagDto tagEditDto = new();
+    private Dictionary<string, TagTranslation> tagTranslationModels = new();
+    private bool isSavingTag = false;
+    private string tagEditError = "";
+    private List<LanguageInfo> SupportedLanguagesList = LocalizationService.SupportedLanguages.Values.ToList();
+    
+    private List<Tag> filteredSuggestions => string.IsNullOrWhiteSpace(inputValue)
+        ? new List<Tag>()
+        : availableTagObjects
+            .Where(t => !selectedTags.Contains(t.Title) && 
+                       (t.Title.Contains(inputValue, StringComparison.OrdinalIgnoreCase) || 
+                        t.GetTranslatedTitle(L.CurrentLanguage).Contains(inputValue, StringComparison.OrdinalIgnoreCase)))
+            .Take(10)
+            .ToList();
+    
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadAvailableTags();
+        ParseValue();
+    }
+    
+    protected override void OnParametersSet()
+    {
+        ParseValue();
+    }
+    
+    private void ParseValue()
+    {
+        if (!string.IsNullOrWhiteSpace(Value))
+        {
+            selectedTags = Value.Split(',', StringSplitOptions.RemoveEmptyEntries)
+                .Select(t => t.Trim())
+                .Where(t => !string.IsNullOrEmpty(t))
+                .Distinct()
+                .ToList();
+        }
+        else
+        {
+            selectedTags.Clear();
+        }
+    }
+    
+    private async Task LoadAvailableTags()
+    {
+        try
+        {
+            // Use ProductService for consistent caching and translations
+            var tags = await ProductService.GetTagsAsync(true); // Force refresh
+            availableTagObjects = tags;
+            availableTags = tags.Select(t => t.Title).ToList();
+            
+            // Count occurrences
+            foreach (var tag in availableTags)
+            {
+                tagCounts[tag] = 1; // Simplified count as we get unique tags from service
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error loading tags: {ex.Message}");
+        }
+    }
+    
+    private async Task DeleteTagFromSystem(string tagTitle)
+    {
+        var tagObj = availableTagObjects.FirstOrDefault(t => t.Title.Equals(tagTitle, StringComparison.OrdinalIgnoreCase));
+        if (tagObj == null) 
+        {
+            Console.WriteLine("Tag object not found for title: " + tagTitle);
+            return;
+        }
+
+        if (!await JSRuntime.InvokeAsync<bool>("confirm", $"Tem certeza que deseja EXCLUIR DEFINITIVAMENTE a tag '{tagTitle}'? Isso afetará todos os produtos que a utilizam."))
+        {
+            return;
+        }
+
+        var success = await ProductService.DeleteTagAsync(tagObj.Id);
+        if (success)
+        {
+            await LoadAvailableTags(); // Reload list
+            // Optionally remove from selectedTags if it was selected
+            if (selectedTags.Contains(tagTitle, StringComparer.OrdinalIgnoreCase))
+            {
+                selectedTags.RemoveAll(t => t.Equals(tagTitle, StringComparison.OrdinalIgnoreCase));
+                UpdateValue();
+            }
+            StateHasChanged();
+        }
+        else 
+        {
+            await JSRuntime.InvokeVoidAsync("alert", "Erro ao excluir tag. Verifique o console ou logs.");
+        }
+    }
+    
+    private void ToggleTag(string tag)
+    {
+        if (selectedTags.Contains(tag))
+        {
+            selectedTags.Remove(tag);
+        }
+        else
+        {
+            selectedTags.Add(tag);
+        }
+        
+        UpdateValue();
+        StateHasChanged();
+    }
+    
+    private void RemoveTag(string tag)
+    {
+        selectedTags.Remove(tag);
+        UpdateValue();
+    }
+    
+    private async Task AddNewTag()
+    {
+        var trimmedInput = inputValue.Trim();
+        if (!string.IsNullOrWhiteSpace(trimmedInput) && !selectedTags.Contains(trimmedInput))
+        {
+             // Check if tag already exists in availableTags
+            if (!availableTags.Contains(trimmedInput))
+            {
+                // Create new tag immediately
+                var createDto = new CreateTagDto { Title = trimmedInput };
+                var (newTag, error) = await ProductService.CreateTagAsync(createDto);
+                
+                if (newTag != null)
+                {
+                    availableTags.Add(trimmedInput);
+                    availableTagObjects.Add(newTag);
+                    tagCounts[trimmedInput] = 1;
+                    
+                    selectedTags.Add(trimmedInput);
+                    inputValue = "";
+                    UpdateValue();
+                }
+                else
+                {
+                   await JSRuntime.InvokeVoidAsync("alert", $"Erro ao criar tag: {error}");
+                }
+            }
+            else
+            {
+                // Tag exists, just select it
+                selectedTags.Add(trimmedInput);
+                inputValue = "";
+                UpdateValue();
+            }
+        }
+    }
+    
+    private void UpdateValue()
+    {
+        var newValue = string.Join(", ", selectedTags);
+        ValueChanged.InvokeAsync(newValue);
+    }
+    
+    private async Task HandleKeyDown(KeyboardEventArgs e)
+    {
+        if (e.Key == "Enter")
+        {
+            await AddNewTag();
+        }
+        else if (e.Key == "Escape")
+        {
+            showSuggestions = false;
+            showAllTags = false;
+        }
+    }
+    
+    private void ToggleAllTags()
+    {
+        showAllTags = !showAllTags;
+        if (showAllTags)
+        {
+            showSuggestions = false;
+        }
+    }
+    
+    private int GetTagCount(string tag)
+    {
+        return tagCounts.TryGetValue(tag, out var count) ? count : 0;
+    }
+
+    private string GetDisplayTitle(string tagTitle)
+    {
+        var tagObj = availableTagObjects.FirstOrDefault(t => t.Title == tagTitle);
+        return tagObj != null ? tagObj.GetTranslatedTitle(L.CurrentLanguage) : tagTitle;
+    }
+
+    private void StartEditTag(string tagTitle)
+    {
+        var tagObj = availableTagObjects.FirstOrDefault(t => t.Title == tagTitle);
+        if (tagObj != null)
+        {
+            StartEditTag(tagObj);
+        }
+    }
+
+    private void StartEditTag(Tag tag)
+    {
+        tagToEdit = tag;
+        tagEditDto = new UpdateTagDto
+        {
+            Id = tag.Id,
+            Title = tag.Title
+        };
+
+        tagTranslationModels.Clear();
+        if (tag.Translations != null)
+        {
+            foreach (var kv in tag.Translations)
+            {
+                tagTranslationModels[kv.Key] = new TagTranslation
+                {
+                    Title = kv.Value.Title,
+                    ManualOverride = kv.Value.ManualOverride
+                };
+            }
+        }
+
+        tagEditError = "";
+        showEditTagModal = true;
+        StateHasChanged();
+    }
+
+    private TagTranslation GetTagTranslationModel(string langCode)
+    {
+        if (!tagTranslationModels.TryGetValue(langCode, out var model))
+        {
+            model = new TagTranslation();
+            tagTranslationModels[langCode] = model;
+        }
+        return model;
+    }
+
+    private async Task HandleUpdateTag()
+    {
+        if (tagToEdit == null || string.IsNullOrWhiteSpace(tagEditDto.Title)) return;
+
+        isSavingTag = true;
+        tagEditError = "";
+        
+        try
+        {
+            // Sync translations
+            tagEditDto.Translations = new Dictionary<string, TagTranslation>();
+            foreach (var kv in tagTranslationModels)
+            {
+                if (!string.IsNullOrWhiteSpace(kv.Value.Title))
+                {
+                    kv.Value.ManualOverride = true;
+                    tagEditDto.Translations[kv.Key] = kv.Value;
+                }
+            }
+
+            if (tagEditDto.Translations.Count == 0) tagEditDto.Translations = null;
+
+            var (success, error) = await ProductService.UpdateTagAsync(tagToEdit.Id, tagEditDto);
+            
+            if (success)
+            {
+                await LoadAvailableTags();
+                showEditTagModal = false;
+                // If title changed, update selectedTags list
+                if (tagToEdit.Title != tagEditDto.Title)
+                {
+                    for (int i = 0; i < selectedTags.Count; i++)
+                    {
+                        if (selectedTags[i] == tagToEdit.Title)
+                        {
+                            selectedTags[i] = tagEditDto.Title;
+                        }
+                    }
+                    UpdateValue();
+                }
+            }
+            else
+            {
+                tagEditError = error ?? "Erro ao atualizar tag";
+            }
+        }
+        catch (Exception ex)
+        {
+            tagEditError = $"Erro: {ex.Message}";
+        }
+        finally
+        {
+            isSavingTag = false;
+        }
+    }
+}

@@ -1,0 +1,218 @@
+@page "/checkout/return"
+@using Microsoft.AspNetCore.Authorization
+@using System.Web
+@using BlazorClient.Core.Services
+@using BlazorClient.Models
+@inject IPaymentService PaymentService
+@inject NavigationManager Navigation
+@inject ILocalizationService L
+@attribute [Authorize]
+
+<!--breadcrumbs area start-->
+<div class="breadcrumbs_area breadcrumbs_other">
+    <div class="container">
+        <div class="row">
+            <div class="col-12">
+                <div class="breadcrumb_content text-center">
+                    <ul>
+                        <li><a href="/">@L.Get("CheckoutReturn.BreadcrumbHome")</a></li>
+                        <li><a href="/checkout">@L.Get("CheckoutReturn.BreadcrumbCheckout")</a></li>
+                    </ul>
+                    <h3>@L.Get("CheckoutReturn.Title")</h3>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+<!--breadcrumbs area end-->
+
+<div class="checkout_section">
+    <div class="container">
+        <div class="row justify-content-center">
+            <div class="col-lg-8 col-md-10">
+                <div class="card shadow-sm">
+                    <div class="card-body text-center py-5">
+                        @if (isProcessing)
+                        {
+                            <div class="spinner-border text-primary mb-4" style="width: 4rem; height: 4rem;" role="status">
+                                <span class="sr-only">@L.Get("Common.Loading")</span>
+                            </div>
+                            <h4 class="mb-3">@L.Get("CheckoutReturn.FinalizingPayment")</h4>
+                            <p class="text-muted">@L.Get("CheckoutReturn.PleaseWait")</p>
+                        }
+                        else if (isSuccess)
+                        {
+                            <div class="mb-4">
+                                <i class="fa fa-check-circle text-success" style="font-size: 5rem;"></i>
+                            </div>
+                            <h4 class="text-success mb-3">@L.Get("CheckoutReturn.PaymentConfirmed")</h4>
+                            <p class="mb-4">@L.Get("CheckoutReturn.OrderProcessedSuccess")</p>
+                            @if (!string.IsNullOrEmpty(transactionId))
+                            {
+                                <p class="text-muted small mb-4">
+                                    <strong>@L.Get("CheckoutReturn.TransactionId")</strong> @transactionId
+                                </p>
+                            }
+                            <a href="/my-account/orders" class="btn btn-primary btn-lg">
+                                <i class="fa fa-shopping-bag mr-2"></i>@L.Get("CheckoutReturn.ViewMyOrders")
+                            </a>
+                        }
+                        else
+                        {
+                            <div class="mb-4">
+                                <i class="fa fa-times-circle text-danger" style="font-size: 5rem;"></i>
+                            </div>
+                            <h4 class="text-danger mb-3">@L.Get("CheckoutReturn.PaymentFailed")</h4>
+                            <p class="mb-4">@errorMessage</p>
+                            <div class="d-flex justify-content-center gap-3">
+                                <a href="/checkout" class="btn btn-outline-primary">
+                                    <i class="fa fa-arrow-left mr-2"></i>@L.Get("CheckoutReturn.TryAgain")
+                                </a>
+                                <a href="/shop" class="btn btn-primary">
+                                    <i class="fa fa-shopping-cart mr-2"></i>@L.Get("CheckoutReturn.ContinueShopping")
+                                </a>
+                            </div>
+                        }
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+@code {
+    private bool isProcessing = true;
+    private bool isSuccess = false;
+    private string? transactionId;
+    private string errorMessage = "";
+
+    [Inject]
+    public IOrderService OrderService { get; set; } = default!;
+
+    protected override async Task OnInitializedAsync()
+    {
+        errorMessage = L.Get("CheckoutReturn.DefaultError");
+        await ProcessPaymentReturn();
+    }
+
+    private async Task ProcessPaymentReturn()
+    {
+        try
+        {
+            var uri = Navigation.ToAbsoluteUri(Navigation.Uri);
+            var queryParams = ParseQueryString(uri.Query);
+
+            // PayPal returns: ?token=PAYID-xxx&PayerID=xxx
+            var paypalToken = queryParams.TryGetValue("token", out var tokenValue) ? tokenValue : null;
+            var payerId = queryParams.TryGetValue("PayerID", out var payerValue) ? payerValue : null;
+
+            // Obtém o pedido retornado pelo provedor ou pelo estado local do checkout.
+            var orderId = queryParams.TryGetValue("orderId", out var orderValue) ? orderValue : null;
+
+            if (string.IsNullOrEmpty(orderId))
+            {
+                // Try LocalStorage here if needed in future
+                errorMessage = L.Get("CheckoutReturn.OrderIdNotFound");
+                isProcessing = false;
+                isSuccess = false;
+                StateHasChanged();
+                return;
+            }
+
+            // CASE 1: PayPal (Has Token)
+            if (!string.IsNullOrEmpty(paypalToken))
+            {
+                var result = await PaymentService.CapturePaymentAsync(orderId, payerId, paypalToken);
+                
+                if (result.Success)
+                {
+                    isSuccess = true;
+                    transactionId = result.TransactionId;
+                }
+                else
+                {
+                    isSuccess = false;
+                    errorMessage = result.Error ?? L.Get("CheckoutReturn.CaptureError");
+                }
+                isProcessing = false;
+                StateHasChanged();
+                return;
+            }
+
+            // Pagamentos assíncronos, como Mercado Pago, retornam sem token PayPal.
+            // Poll for status update (Webhook might take a few seconds)
+            errorMessage = L.Get("CheckoutReturn.WaitingConfirmation");
+            StateHasChanged();
+
+            int attempts = 0;
+            while (attempts < 20) // Poll for ~1 minute (20 * 3s)
+            {
+                var order = await OrderService.GetOrderById(orderId);
+                
+                if (order != null)
+                {
+                    if (order.Status == "Paid" || order.Status == "Processing" || order.Status == "Shipped")
+                    {
+                        isSuccess = true;
+                        transactionId = order.TransactionId ?? order.PaymentIntentId;
+                        isProcessing = false;
+                        StateHasChanged();
+                        return;
+                    }
+                    
+                    if (order.Status == "PaymentFailed" || order.Status == "Cancelled")
+                    {
+                        isSuccess = false;
+                        errorMessage = order.PaymentFailureReason ?? L.Get("CheckoutReturn.PaymentFailedCancelled");
+                        isProcessing = false;
+                        StateHasChanged();
+                        return;
+                    }
+                }
+
+                attempts++;
+                await Task.Delay(3000); // Wait 3 seconds
+            }
+
+            // Timeout
+            isSuccess = false;
+            errorMessage = L.Get("CheckoutReturn.PaymentProcessingBackground");
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error processing payment return: {ex.Message}");
+            isSuccess = false;
+            errorMessage = L.Get("CheckoutReturn.ErrorProcessingReturn");
+        }
+        finally
+        {
+            isProcessing = false;
+            StateHasChanged();
+        }
+    }
+
+    private Dictionary<string, string> ParseQueryString(string query)
+    {
+        var result = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        
+        if (string.IsNullOrEmpty(query))
+            return result;
+
+        // Remove leading '?' if present
+        if (query.StartsWith("?"))
+            query = query.Substring(1);
+
+        foreach (var pair in query.Split('&', StringSplitOptions.RemoveEmptyEntries))
+        {
+            var parts = pair.Split('=', 2);
+            if (parts.Length == 2)
+            {
+                var key = HttpUtility.UrlDecode(parts[0]);
+                var value = HttpUtility.UrlDecode(parts[1]);
+                result[key] = value;
+            }
+        }
+
+        return result;
+    }
+}

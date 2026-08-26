@@ -1,0 +1,76 @@
+/* Skeleton Loading Styles */
+.initial-skeleton {
+    background: linear-gradient(90deg, #f0f0f0 25%, #e8e8e8 37%, #f0f0f0 63%);
+    background-size: 400% 100%;
+    animation: shimmer 1.4s ease infinite;
+    border-radius: 4px;
+}
+
+@keyframes shimmer {
+    0% {
+        background-position: 100% 50%;
+    }
+
+    100% {
+        background-position: 0 50%;
+    }
+}
+
+.skeleton-header {
+    height: 60px;
+    background: #2E5E3A;
+    margin-bottom: 20px;
+}
+
+.skeleton-hero {
+    height: 80px;
+    margin: 20px auto;
+    max-width: 1200px;
+}
+
+.skeleton-section-title {
+    height: 32px;
+    width: 200px;
+    margin: 40px auto 30px;
+}
+
+.skeleton-products {
+    display: flex;
+    gap: 20px;
+    justify-content: center;
+    flex-wrap: wrap;
+    max-width: 1200px;
+    margin: 0 auto;
+    padding: 0 20px;
+}
+
+.skeleton-card {
+    width: 280px;
+    padding: 15px;
+    background: #fff;
+    border-radius: 8px;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
+}
+
+.skeleton-card-img {
+    width: 100%;
+    aspect-ratio: 1;
+    margin-bottom: 15px;
+}
+
+.skeleton-card-title {
+    height: 18px;
+    width: 80%;
+    margin-bottom: 12px;
+}
+
+.skeleton-card-price {
+    height: 22px;
+    width: 50%;
+    margin-bottom: 15px;
+}
+
+.skeleton-card-btn {
+    height: 40px;
+    width: 100%;
+}

@@ -1,0 +1,642 @@
+@page "/checkout"
+@using Microsoft.AspNetCore.Authorization
+@using BlazorClient.Core.Services
+@inject ILocalizationService L
+@attribute [Authorize]
+
+<!-- Premium Checkout Page -->
+<div class="checkout-premium">
+    <div class="container">
+        <!-- Progress Stepper -->
+        <div class="checkout-stepper">
+            <div class="checkout-stepper-step completed">
+                <div class="checkout-stepper-number">✓</div>
+                <span class="checkout-stepper-label">@L.Get("Cart.Title")</span>
+            </div>
+            <div class="checkout-stepper-line completed"></div>
+            <div class="checkout-stepper-step active">
+                <div class="checkout-stepper-number">2</div>
+                <span class="checkout-stepper-label">@L.Get("Checkout.Title")</span>
+            </div>
+            <div class="checkout-stepper-line"></div>
+            <div class="checkout-stepper-step">
+                <div class="checkout-stepper-number">3</div>
+                <span class="checkout-stepper-label">@L.Get("Order.ThankYou")</span>
+            </div>
+        </div>
+
+        @if (isLoading)
+        {
+            <div class="checkout-loading">
+                <div class="checkout-spinner"></div>
+            </div>
+        }
+        else if (cart == null || cart.Items.Count == 0)
+        {
+            <div class="checkout-card">
+                <div class="checkout-empty">
+                    <i class="fa fa-shopping-cart"></i>
+                    <h3>@L.Get("Cart.Empty")</h3>
+                    <p>@L.Get("Cart.ContinueShopping")</p>
+                    <a href="/shop">@L.Get("Cart.GoShopping")</a>
+                </div>
+            </div>
+        }
+        else
+        {
+            <div class="checkout-layout">
+                <!-- Left Column - Form -->
+                <div class="checkout-form-column">
+                    <!-- Coupon Card -->
+                    <div class="checkout-coupon" @onclick="ToggleCoupon" style="cursor: pointer;">
+                        <div class="checkout-coupon-toggle">
+                            <i class="fa @(showCouponForm ? "fa-chevron-up" : "fa-tag")"></i>
+                            <span>@L.Get("Checkout.HaveCoupon")? @L.Get("Checkout.ClickToEnterCode")</span>
+                        </div>
+                        @if (showCouponForm)
+                        {
+                            <EditForm Model="@couponModel" OnValidSubmit="ApplyCoupon" @onclick:stopPropagation="true">
+                                <div class="checkout-coupon-form">
+                                    <input placeholder="@L.Get("Cart.CouponPlaceholder")" type="text" @bind-value="couponModel.Code">
+                                    <button type="submit">@L.Get("Cart.ApplyCoupon")</button>
+                                </div>
+                                @if (!string.IsNullOrEmpty(couponMessage))
+                                {
+                                    <div class="checkout-alert success" style="margin-top: 12px;">
+                                        <i class="fa fa-check-circle"></i>
+                                        <span>@couponMessage</span>
+                                    </div>
+                                }
+                            </EditForm>
+                        }
+                    </div>
+
+                    <!-- Billing Details Card -->
+                    <div class="checkout-card">
+                        <h3 class="checkout-card-title">
+                            <span class="icon"><i class="fa fa-user"></i></span>
+                            @L.Get("Checkout.BillingDetails")
+                        </h3>
+                        
+                        <div class="checkout-input-group">
+                            <label>@L.Get("Checkout.FullName") <span>*</span></label>
+                            <InputText @bind-Value="billingName" readonly />
+                        </div>
+                        
+                        <div class="checkout-input-row">
+                            <div class="checkout-input-group">
+                                <label>@L.Get("Checkout.Email")</label>
+                                <input type="email" value="@(userProfile?.Email ?? "")" readonly />
+                            </div>
+                            <div class="checkout-input-group">
+                                <label>@L.Get("Checkout.Phone")</label>
+                                <input type="tel" value="@(userProfile?.PhoneNumber ?? "")" readonly />
+                            </div>
+                        </div>
+
+                        @if (!IsDigitalOnly)
+                        {
+                            <div class="checkout-input-group">
+                                <label>@L.Get("Checkout.CPF_CNPJ") <span>*</span></label>
+                                <input type="text" @bind-value="orderModel.CustomerDocument" placeholder="000.000.000-00" readonly/>
+                            </div>
+                        }
+                    </div>
+
+                    <!-- Shipping Address Card -->
+                    @if (!IsDigitalOnly && !IsLocalPickupOnly)
+                    {
+                        <div class="checkout-card">
+                            <h3 class="checkout-card-title">
+                                <span class="icon"><i class="fa fa-map-marker"></i></span>
+                                @L.Get("Checkout.ShippingAddress")
+                            </h3>
+                            
+                            @if (IsAddressFixed)
+                            {
+                                <div class="checkout-locked-notice">
+                                    <i class="fa fa-lock"></i>
+                                    <span><strong>@L.Get("Checkout.AddressLocked"):</strong> @L.Get("Checkout.AddressLockedMessage") <a href="/cart">@L.Get("Checkout.ReturnToCart")</a></span>
+                                </div>
+                            }
+                            
+                            <div class="checkout-input-row">
+                                <div class="checkout-input-group">
+                                    <label>@L.Get("Checkout.ZipCode")</label>
+                                    <input type="text" @bind-value="orderModel.ZipCode" readonly />
+                                </div>
+                                <div class="checkout-input-group">
+                                    <label>@L.Get("Checkout.City")</label>
+                                    <input type="text" @bind-value="orderModel.City" readonly />
+                                </div>
+                                <div class="checkout-input-group">
+                                    <label>@L.Get("Checkout.State")</label>
+                                    <input type="text" @bind-value="orderModel.State" readonly />
+                                </div>
+                            </div>
+                            
+                            <div class="checkout-input-row">
+                                <div class="checkout-input-group" style="flex: 2;">
+                                    <label>@L.Get("Checkout.Street")</label>
+                                    <input type="text" @bind-value="orderModel.Street" readonly />
+                                </div>
+                                <div class="checkout-input-group">
+                                    <label>@L.Get("Checkout.Number")</label>
+                                    <input type="text" @bind-value="orderModel.Number" readonly />
+                                </div>
+                            </div>
+                            
+                            <div class="checkout-input-row">
+                                <div class="checkout-input-group">
+                                    <label>@L.Get("Checkout.Neighborhood")</label>
+                                    <input type="text" @bind-value="orderModel.Neighborhood" readonly />
+                                </div>
+                                <div class="checkout-input-group">
+                                    <label>@L.Get("Checkout.Country")</label>
+                                    <input type="text" @bind-value="orderModel.Country" readonly />
+                                </div>
+                            </div>
+                        </div>
+                    }
+                    else if (IsLocalPickupOnly)
+                    {
+                        <div class="checkout-card">
+                            <h3 class="checkout-card-title"><span class="icon"><i class="fa fa-shopping-bag"></i></span>Retirada local</h3>
+                            <div class="checkout-locked-notice">
+                                <i class="fa fa-check-circle"></i>
+                                <span><strong>Sem custo de entrega.</strong><br />@PickupDescription<br /><small>Aguarde a confirmação de que o pedido está pronto antes de se dirigir ao local.</small></span>
+                            </div>
+                        </div>
+                    }
+
+                    <!-- Payment Method Card -->
+                    <div class="checkout-card">
+                        <h3 class="checkout-card-title">
+                            <span class="icon"><i class="fa fa-credit-card"></i></span>
+                            @L.Get("Checkout.PaymentMethod")
+                        </h3>
+                        
+                        <div class="checkout-payment-methods">
+                                <button type="button" 
+                                        class="checkout-payment-btn @(orderModel.PaymentMethod == "PayPal" ? "active" : "")" 
+                                        @onclick='() => SelectPaymentMethod("PayPal")'>
+                                    <div class="payment-icon"><i class="fa fa-paypal" style="color: #003087; font-size: 28px;"></i></div>
+                                    <span class="payment-name">PayPal</span>
+                                    <span class="payment-desc">Internacional</span>
+                                </button>
+                                
+                                <button type="button" 
+                                        class="checkout-payment-btn @(orderModel.PaymentMethod == "MercadoPago" ? "active" : "")" 
+                                        @onclick='() => SelectPaymentMethod("MercadoPago")'>
+                                    <div class="payment-icon" style="font-size: 28px;">💳</div>
+                                    <span class="payment-name">Mercado Pago</span>
+                                    <span class="payment-desc">@L.Get("Checkout.PayWithMercadoPago")</span>
+                                </button>
+                                
+                        </div>
+                        
+                        @if (!string.IsNullOrEmpty(errorMessage))
+                        {
+                            <div class="checkout-alert error">
+                                <i class="fa fa-exclamation-circle"></i>
+                                <span>@errorMessage</span>
+                            </div>
+                        }
+                    </div>
+                </div>
+
+                <!-- Right Column - Order Summary -->
+                <div class="checkout-summary">
+                    <div class="checkout-summary-card">
+                        <h3 class="checkout-summary-title">@L.Get("Checkout.YourOrder")</h3>
+                        
+                        <!-- Cart Items -->
+                        <div class="checkout-summary-items">
+                            @foreach(var item in cart.Items)
+                            {
+                                <div class="checkout-summary-item">
+                                    <div class="checkout-summary-item-name">
+                                        @item.ProductTitle
+                                        <div class="checkout-summary-item-qty">× @item.Quantity</div>
+                                    </div>
+                                    <div class="checkout-summary-item-price">
+                                        @GetFormattedItemTotal(item)
+                                    </div>
+                                </div>
+                            }
+                        </div>
+                        
+                        <!-- Totals -->
+                        <div class="checkout-summary-totals">
+                            <div class="checkout-summary-row">
+                                <span>@L.Get("Checkout.CartSubtotal")</span>
+                                <span>@LocaleService.FormatPrice(cart.SubTotal, cart.DisplaySubTotal, cart.DisplayCurrency)</span>
+                            </div>
+                            
+                            @if (GetTotalShipping() > 0)
+                            {
+                                <div class="checkout-summary-row">
+                                    <span>@L.Get("Cart.Shipping")</span>
+                                    <span>@GetFormattedShippingTotal()</span>
+                                </div>
+                            }
+                            else if (IsLocalPickupOnly)
+                            {
+                                <div class="checkout-summary-row">
+                                    <span>Retirada local</span>
+                                    <span class="text-success">Grátis</span>
+                                </div>
+                            }
+                            
+                            @if (cart.DiscountAmount > 0)
+                            {
+                                <div class="checkout-summary-row discount">
+                                    <span>@L.Get("Checkout.CouponDiscount") (@cart.CouponCode)</span>
+                                    <span>-@LocaleService.FormatPrice(cart.DiscountAmount, cart.DisplayDiscountAmount, cart.DisplayCurrency)</span>
+                                </div>
+                            }
+                            
+                            <div class="checkout-summary-row total">
+                                <span>@L.Get("Checkout.OrderTotal")</span>
+                                <span class="checkout-total-value">@GetFormattedGrandTotal()</span>
+                            </div>
+                        </div>
+                        
+                        <!-- Submit Button -->
+                        <button class="checkout-submit-btn" type="button" @onclick="PlaceOrder" disabled="@isProcessing">
+                            @if(isProcessing) 
+                            { 
+                                <span>@L.Get("Checkout.Processing")</span> 
+                            } 
+                            else 
+                            { 
+                                <span>@L.Get("Checkout.PlaceOrder")</span> 
+                            }
+                        </button>
+                    </div>
+                </div>
+            </div>
+        }
+    </div>
+</div>
+<!--Checkout page section end-->
+
+@using BlazorClient.Models
+@using Microsoft.JSInterop
+@inject ICartService CartService
+@inject IOrderService OrderService
+@inject IUserService UserService
+@inject IPaymentService PaymentService
+@inject NavigationManager Navigation
+@inject IJSRuntime JSRuntime
+@inject IClientLocaleService LocaleService
+
+@code {
+    private Cart? cart;
+    private UserProfile? userProfile;
+    private bool isLoading = true;
+    private bool isProcessing = false;
+    private string? errorMessage;
+    private string? couponMessage;
+    
+    private bool IsDigitalOnly => cart?.Items != null && cart.Items.Any() && cart.Items.All(i => i.IsDigital);
+    private bool IsLocalPickupOnly => cart?.Items != null && cart.Items.Any(i => !i.IsDigital) && cart.Items.Where(i => !i.IsDigital).All(i => i.SelectedShippingServiceId == 3);
+    private string PickupDescription => cart?.Items.FirstOrDefault(i => !i.IsDigital && i.SelectedShippingServiceId == 3)?.SelectedShippingDescription ?? "Consulte o local de retirada na confirmação do pedido.";
+    
+    // Computed: Se temos CEP de frete definido no carrinho, o endereço é fixo
+    private bool IsAddressFixed => !string.IsNullOrEmpty(cart?.ShippingZipCode);
+
+    // Billing form fields
+    private string billingName = ""; 
+    
+    private ApplyCouponDto couponModel = new ApplyCouponDto();
+    private OrderDto orderModel = new OrderDto 
+    { 
+        PaymentMethod = "MercadoPago", // Default to MercadoPago as it's popular
+        ShippingAddress = "" 
+    };
+
+    private void SelectPaymentMethod(string method)
+    {
+        orderModel.PaymentMethod = method;
+    }
+
+    private bool showCouponForm = false;
+    
+    private void ToggleCoupon()
+    {
+        showCouponForm = !showCouponForm;
+    }
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LocaleService.EnsureInitializedAsync();
+        await LoadData();
+    }
+
+    private async Task LoadData()
+    {
+        isLoading = true;
+        try
+        {
+            // Load cart and user profile in parallel
+            var cartTask = CartService.GetCart(LocaleService.CurrentLocale.Currency);
+            var profileTask = UserService.GetProfileAsync();
+            
+            await Task.WhenAll(cartTask, profileTask);
+            
+            cart = await cartTask;
+            userProfile = await profileTask;
+            
+            // Pre-fill billing name and shipping address from profile
+            if (userProfile != null)
+            {
+                billingName = userProfile.DisplayName ?? "";
+                
+                // Pre-fill address fields from profile
+                orderModel.Street = userProfile.Street;
+                orderModel.Number = userProfile.Number;
+                orderModel.Neighborhood = userProfile.Neighborhood;
+                orderModel.City = userProfile.City;
+                orderModel.State = userProfile.State;
+                orderModel.ZipCode = userProfile.ZipCode;
+                orderModel.Country = userProfile.Country;
+                
+                if (!string.IsNullOrEmpty(userProfile.CustomerDocument))
+                {
+                    orderModel.CustomerDocument = userProfile.CustomerDocument;
+                }
+                
+                // Anti-Fraude: Se o carrinho tem um CEP de frete definido, ele tem prioridade sobre o perfil
+                // Isso garante que o que o usuário calculou é o que vai aparecer no checkout, e como é ReadOnly, não pode mudar.
+                if (cart != null && !string.IsNullOrEmpty(cart.ShippingZipCode))
+                {
+                    // Se o CEP do perfil for diferente do CEP do frete, devemos avisar? 
+                    // Ou apenas sobrescrevemos o CEP do formulário com o do frete.
+                    // O ideal é sobrescrever para garantir consistência visual com a validação do backend.
+                    orderModel.ZipCode = cart.ShippingZipCode;
+                }
+                
+                orderModel.ShippingAddress = GetFullAddress();
+            }
+        }
+        catch (Exception ex)
+        {
+            errorMessage = L.Get("Cart.ErrorLoadingData");
+            Console.WriteLine(ex.Message);
+        }
+        finally
+        {
+            isLoading = false;
+        }
+    }
+    
+    private string GetFullAddress()
+    {
+        if (userProfile == null) return "";
+        
+        var parts = new List<string>();
+        
+        if (!string.IsNullOrEmpty(userProfile.Street))
+            parts.Add(userProfile.Street);
+        if (!string.IsNullOrEmpty(userProfile.Number))
+            parts.Add(userProfile.Number);
+        if (!string.IsNullOrEmpty(userProfile.Neighborhood))
+            parts.Add(userProfile.Neighborhood);
+        if (!string.IsNullOrEmpty(userProfile.City))
+            parts.Add(userProfile.City);
+        if (!string.IsNullOrEmpty(userProfile.State))
+            parts.Add(userProfile.State);
+        if (!string.IsNullOrEmpty(userProfile.ZipCode))
+            parts.Add(userProfile.ZipCode);
+        if (!string.IsNullOrEmpty(userProfile.Country))
+            parts.Add(userProfile.Country);
+            
+        return string.Join(", ", parts);
+    }
+
+    private async Task ApplyCoupon()
+    {
+        if (string.IsNullOrWhiteSpace(couponModel.Code)) return;
+
+        try
+        {
+            couponMessage = L.Get("Cart.CouponApplying");
+            await CartService.ApplyCoupon(couponModel.Code, LocaleService.CurrentLocale.Currency);
+            // Refresh to get calculation from server
+            cart = await CartService.GetCart(LocaleService.CurrentLocale.Currency); 
+            couponMessage = L.Get("Cart.CouponApplied");
+        }
+        catch (Exception ex)
+        {
+            couponMessage = $"{L.Get("Common.Error")}: {ex.Message}";
+        }
+    }
+
+    private async Task PlaceOrder()
+    {
+        // Update the concatenated address string based on form values BEFORE validation
+        orderModel.ShippingAddress = IsLocalPickupOnly ? $"Retirada local — {PickupDescription}" : $"{orderModel.Street}, {orderModel.Number} - {orderModel.Neighborhood}, {orderModel.City} - {orderModel.State}, {orderModel.ZipCode}, {orderModel.Country}";
+
+        if (!IsLocalPickupOnly && (string.IsNullOrWhiteSpace(orderModel.Street) ||
+            string.IsNullOrWhiteSpace(orderModel.Number) ||
+            string.IsNullOrWhiteSpace(orderModel.City) || 
+            string.IsNullOrWhiteSpace(orderModel.State) ||
+            string.IsNullOrWhiteSpace(orderModel.ZipCode)))
+        {
+            errorMessage = L.Get("Cart.ErrorIncompleteAddress");
+            return;
+        }
+
+        if (!IsDigitalOnly && string.IsNullOrWhiteSpace(orderModel.CustomerDocument))
+        {
+            errorMessage = L.Get("Cart.ErrorMissingDocument");
+            return;
+        }
+
+        isProcessing = true;
+        errorMessage = null;
+
+        try
+        {
+            // NEW: Salvar CPF no perfil se for novo ou atualizado
+            if (userProfile != null && 
+                !string.IsNullOrWhiteSpace(orderModel.CustomerDocument) && 
+                userProfile.CustomerDocument != orderModel.CustomerDocument)
+            {
+                userProfile.CustomerDocument = orderModel.CustomerDocument;
+                // Atualizar perfil silenciosamente (sem travar se der erro não crítico, mas await para garantir consistência se possível)
+                try {
+                    await UserService.UpdateProfileAsync(userProfile);
+                } catch(Exception) { /* Ignora erro de update de perfil para não bloquear compra */ }
+            }
+
+            // Populate OrderDto with customer data from profile
+            var orderToSend = new OrderDto
+            {
+                PaymentMethod = orderModel.PaymentMethod,
+                ShippingAddress = orderModel.ShippingAddress,
+                // Customer data
+                CustomerName = userProfile?.DisplayName,
+                CustomerEmail = userProfile?.Email,
+                CustomerPhone = userProfile?.PhoneNumber,
+                CustomerDocument = orderModel.CustomerDocument, // Explicit call to bind from input
+                // Detailed address from form (orderModel)
+                Street = orderModel.Street,
+                Number = orderModel.Number,
+                Neighborhood = orderModel.Neighborhood,
+                City = orderModel.City,
+                State = orderModel.State,
+                ZipCode = orderModel.ZipCode,
+                Country = orderModel.Country
+            };
+            
+            // 1. Create the order first and get the ID
+            var orderId = await OrderService.PlaceOrder(orderToSend);
+            
+            if (orderModel.PaymentMethod == "PayPal" || orderModel.PaymentMethod == "MercadoPago")
+            {
+                // Initiate payment flow
+                var returnUrl = Navigation.ToAbsoluteUri($"/checkout/return?orderId={orderId}").ToString();
+                var cancelUrl = Navigation.ToAbsoluteUri("/checkout").ToString();
+                
+                var providerName = orderModel.PaymentMethod;
+                var paymentResponse = await PaymentService.InitiatePaymentAsync(orderId, providerName, returnUrl, cancelUrl);
+                
+                // Debug logging
+                Console.WriteLine($"{providerName} Init Response - Success: {paymentResponse.Success}, Status: {paymentResponse.Status}, HasApprovalUrl: {!string.IsNullOrEmpty(paymentResponse.ApprovalUrl)}");
+                
+                // Check if payment initiation was successful
+                if (!paymentResponse.Success)
+                {
+                    var msg = string.Format(L.Get("Cart.ErrorPaymentInitiation"), providerName);
+                    if (!string.IsNullOrEmpty(paymentResponse.Error)) 
+                    {
+                        msg += $" {L.Get("Checkout.Details")}: {paymentResponse.Error}";
+                        Console.WriteLine($"{providerName} Error Details: {paymentResponse.Error}");
+                    }
+                    throw new Exception(msg);
+                }
+                
+                // Check if we received an approval URL
+                if (string.IsNullOrEmpty(paymentResponse.ApprovalUrl))
+                {
+                    var msg = string.Format(L.Get("Cart.ErrorMissingApprovalUrl"), providerName);
+                    if (!string.IsNullOrEmpty(paymentResponse.Status)) 
+                    {
+                        msg += $" Status: {paymentResponse.Status}";
+                    }
+                    Console.WriteLine($"Missing Approval URL - Response: Success={paymentResponse.Success}, Status={paymentResponse.Status}");
+                    throw new Exception(msg);
+                }
+                
+                // Redirect to payment provider (PayPal or Crypto Pay web/bot URL)
+                Navigation.NavigateTo(paymentResponse.ApprovalUrl);
+            }
+            else
+            {
+                // For non-redirect methods (like Cash on Delivery), just go to orders page
+                // Future consideration: initiate "offline" payment processing here if needed
+                Navigation.NavigateTo("/my-account/orders");
+            }
+        }
+        catch (Exception ex)
+        {
+            errorMessage = ex.Message;
+        }
+        finally
+        {
+            isProcessing = false;
+        }
+    }
+    
+    /// <summary>
+    /// Calculate total shipping cost from all cart items
+    /// </summary>
+    private decimal GetTotalShipping()
+    {
+        if (cart == null || cart.Items == null) return 0;
+        
+        decimal total = 0;
+        foreach (var item in cart.Items)
+        {
+            // Only count shipping for physical items that have a shipping option selected
+            if (!item.IsDigital && item.SelectedShippingPrice.HasValue)
+            {
+                total += item.SelectedShippingPrice.Value;
+            }
+        }
+        
+        return total;
+    }
+    
+    /// <summary>
+    /// Calculate grand total including products, shipping, and discounts (Legacy/Fallback)
+    /// </summary>
+    private double GetGrandTotal()
+    {
+        if (cart == null) return 0;
+        
+        double productTotal = cart.Total; // Products minus discount
+        decimal shippingTotal = GetTotalShipping();
+        
+        return productTotal + (double)shippingTotal;
+    }
+    
+    // --- Helpers de Formatação com Conversão Implícita para Frete ---
+
+    private string GetFormattedItemTotal(CartItem item)
+    {
+         var price = item.Price * item.Quantity;
+         decimal? displayPrice = item.DisplayPrice.HasValue ? item.DisplayPrice.Value * item.Quantity : null;
+         return LocaleService.FormatPrice(price, displayPrice, item.DisplayCurrency);
+    }
+    
+    private string GetFormattedShippingTotal()
+    {
+        decimal shippingBrl = GetTotalShipping();
+        if (shippingBrl == 0) return LocaleService.FormatPrice(0, 0, cart?.DisplayCurrency);
+        
+        // Se estivermos em BRL, usa direto
+        if (cart?.DisplayCurrency == "BRL" || string.IsNullOrEmpty(cart?.DisplayCurrency))
+        {
+             return LocaleService.FormatPrice((double)shippingBrl, shippingBrl, "BRL");
+        }
+        
+        // Se estivermos em outra moeda (USD/EUR), precisamos estimar o valor do frete convertido.
+        // Usamos a razão (ratio) entre o DisplaySubTotal e SubTotal do carrinho.
+        decimal convertedShipping = shippingBrl; // Default
+        
+        if (cart.SubTotal > 0 && cart.DisplaySubTotal.HasValue)
+        {
+            var ratio = cart.DisplaySubTotal.Value / (decimal)cart.SubTotal;
+            convertedShipping = shippingBrl * ratio;
+        }
+        
+        return LocaleService.FormatPrice((double)shippingBrl, convertedShipping, cart.DisplayCurrency);
+    }
+    
+    private string GetFormattedGrandTotal()
+    {
+        if (cart == null) return "";
+        
+        decimal displaySubTotal = cart.DisplaySubTotal ?? (decimal)cart.SubTotal;
+        decimal displayDiscount = cart.DisplayDiscountAmount ?? (decimal)cart.DiscountAmount;
+        
+        // Calcular frete convertido (mesma lógica)
+        decimal shippingBrl = GetTotalShipping();
+        decimal displayShipping = shippingBrl;
+        
+        if (cart.DisplayCurrency != "BRL" && cart.SubTotal > 0 && cart.DisplaySubTotal.HasValue)
+        {
+             var ratio = cart.DisplaySubTotal.Value / (decimal)cart.SubTotal;
+             displayShipping = shippingBrl * ratio;
+        }
+        
+        decimal finalTotal = displaySubTotal + displayShipping - displayDiscount;
+        if (finalTotal < 0) finalTotal = 0;
+        
+        return LocaleService.FormatPrice(cart.Total, finalTotal, cart.DisplayCurrency);
+    }
+}
+

@@ -1,0 +1,343 @@
+@using BlazorClient.Core.Interfaces
+@page "/admin/files"
+@using BlazorClient.Models
+@using BlazorClient.Core.Services
+@inject IProductService ProductService
+@inject IJSRuntime JSRuntime
+@inject ILocalizationService L
+@attribute [Microsoft.AspNetCore.Authorization.Authorize(Roles = "Admin")]
+
+<div class="container-fluid ic-admin-page">
+    <div class="admin-page-header ic-admin-page-heading d-flex justify-content-between align-items-end mb-4">
+        <div><span class="ic-admin-kicker">ARMAZENAMENTO</span><h1>Gerenciador de arquivos</h1><p>Organize imagens e arquivos digitais armazenados no MinIO ou Cloudflare R2.</p></div>
+        <button class="btn btn-outline-secondary px-4" @onclick="Refresh">
+            <i class="fa fa-refresh"></i> Atualizar
+        </button>
+    </div>
+
+    <div class="card shadow-sm">
+        <div class="card-header bg-light">
+            <div class="d-flex justify-content-between align-items-center flex-wrap gap-2">
+                <!-- Breadcrumb Navigation -->
+                <nav aria-label="breadcrumb" class="flex-grow-1">
+                    <ol class="breadcrumb mb-0">
+                        <li class="breadcrumb-item">
+                            <a href="javascript:void(0)" @onclick='() => NavigateTo("")'>
+                                <i class="fa fa-home"></i> @L.Get("Admin.FileManager.Home")
+                            </a>
+                        </li>
+                        @foreach (var crumb in GetBreadcrumbs())
+                        {
+                            <li class="breadcrumb-item active">
+                                <a href="javascript:void(0)" @onclick='() => NavigateTo(crumb.Path)'>
+                                    @crumb.Name
+                                </a>
+                            </li>
+                        }
+                    </ol>
+                </nav>
+                
+                <!-- Search Input -->
+                <div class="input-group" style="max-width: 300px;">
+                    <span class="input-group-text"><i class="fa fa-search"></i></span>
+                    <input type="text" class="form-control" placeholder="@L.Get("Admin.FileManager.SearchPlaceholder")" 
+                           @bind="searchTerm" @bind:event="oninput" @onkeyup="OnSearchKeyUp" />
+                    @if (!string.IsNullOrEmpty(searchTerm))
+                    {
+                        <button class="btn btn-outline-secondary" type="button" @onclick="ClearSearch">
+                            <i class="fa fa-times"></i>
+                        </button>
+                    }
+                </div>
+            </div>
+        </div>
+        <div class="card-body p-0">
+             @if (isLoading)
+            {
+                <div class="text-center p-5">
+                    <div class="spinner-border text-primary" role="status"></div>
+                </div>
+            }
+            else if (browserResponse == null || (!browserResponse.Items.Any()))
+            {
+                <div class="text-center p-5 text-muted">
+                    <i class="fa fa-folder-open-o fa-3x mb-3"></i>
+                    <p>@(string.IsNullOrEmpty(searchTerm) ? L.Get("Admin.FileManager.EmptyPasta") : L.Get("Admin.FileManager.NoFilesFound"))</p>
+                </div>
+            }
+            else
+            {
+                <div class="list-group list-group-flush">
+                    @foreach (var item in browserResponse.Items.OrderByDescending(i => i.IsFolder).ThenBy(i => i.Name))
+                    {
+                        <div class="list-group-item list-group-item-action d-flex justify-content-between align-items-center">
+                            <div class="d-flex align-items-center" style="cursor: pointer; flex-grow: 1;" @onclick="() => OnItemClick(item)">
+                                <div class="me-3 text-secondary">
+                                    @if (item.IsFolder)
+                                    {
+                                        <i class="fa fa-folder fa-2x text-warning"></i>
+                                    }
+                                    else
+                                    {
+                                        <i class="fa fa-file-archive-o fa-2x text-info"></i>
+                                    }
+                                </div>
+                                <div>
+                                    <h6 class="mb-0">@item.Name</h6>
+                                    @if (!item.IsFolder)
+                                    {
+                                        <small class="text-muted">
+                                            @FormatSize(item.Size) • @(item.LastModified.HasValue ? L.FormatDateTime(item.LastModified.Value) : "")
+                                        </small>
+                                    }
+                                </div>
+                            </div>
+                            
+                            @if (!item.IsFolder)
+                            {
+                                <div class="btn-group">
+                                    <button class="btn btn-sm btn-outline-info" @onclick="() => InspectFile(item.Key)" @onclick:stopPropagation="true" title="@L.Get("Admin.FileManager.InspectVersions")">
+                                        <i class="fa fa-search"></i>
+                                    </button>
+                                    <button class="btn btn-sm btn-outline-success" @onclick="() => DownloadFile(item)" @onclick:stopPropagation="true" title="@L.Get("Admin.FileManager.DownloadFile")">
+                                        <i class="fa fa-download"></i>
+                                    </button>
+                                    <button class="btn btn-sm btn-outline-danger" @onclick="() => DeleteFile(item)" @onclick:stopPropagation="true" title="@L.Get("Admin.FileManager.Delete")">
+                                        <i class="fa fa-trash"></i>
+                                    </button>
+                                </div>
+                            }
+                        </div>
+                    }
+                </div>
+            }
+        </div>
+        
+        <!-- Pagination Footer -->
+        @if (browserResponse != null && browserResponse.Items.Any())
+        {
+            <div class="card-footer bg-light d-flex justify-content-between align-items-center">
+                <div class="text-muted small">
+                    @String.Format(browserResponse.TotalItems > 0 ? L.Get("Admin.FileManager.ShowingItemsWithTotal") : L.Get("Admin.FileManager.ShowingItems"), browserResponse.Items.Count, browserResponse.TotalItems > 0 ? browserResponse.TotalItems.ToString() : "")
+                </div>
+                <div class="btn-group">
+                    <button class="btn btn-outline-primary btn-sm" @onclick="PreviousPage" disabled="@(tokenHistory.Count == 0)">
+                        <i class="fa fa-chevron-left"></i> @L.Get("Admin.Common.Previous")
+                    </button>
+                    <button class="btn btn-outline-primary btn-sm" @onclick="NextPage" disabled="@(!browserResponse.HasMore)">
+                        @L.Get("Admin.Common.Next") <i class="fa fa-chevron-right"></i>
+                    </button>
+                </div>
+            </div>
+        }
+    </div>
+</div>
+
+<!-- Modal Inspection (Reused Logic) -->
+@if (showInspectionModal)
+{
+    <div class="modal fade show" tabindex="-1" style="display: block; background-color: rgba(0,0,0,0.5);">
+        <div class="modal-dialog modal-lg">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title"><i class="fa fa-search"></i> @L.Get("Admin.FileManager.InspectionTitle")</h5>
+                    <button type="button" class="btn-close" @onclick="CloseInspectionModal"></button>
+                </div>
+                <div class="modal-body">
+                    <textarea class="form-control" rows="15" readonly style="font-family: monospace;">@inspectionResult</textarea>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" @onclick="CloseInspectionModal">@L.Get("Admin.Common.Close")</button>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+
+@code {
+    private B2BrowserResponse? browserResponse;
+    private string currentPath = "";
+    private bool isLoading = false;
+    
+    // Search & Pagination
+    private string searchTerm = "";
+    private string? currentContinuationToken = null;
+    private Stack<string?> tokenHistory = new();
+    private System.Timers.Timer? searchDebounceTimer;
+    
+    // Inspection
+    private bool showInspectionModal = false;
+    private string inspectionResult = "";
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadFiles();
+    }
+
+    private async Task Refresh()
+    {
+        currentContinuationToken = null;
+        tokenHistory.Clear();
+        await LoadFiles();
+    }
+
+    private async Task LoadFiles()
+    {
+        isLoading = true;
+        StateHasChanged();
+        browserResponse = await ProductService.BrowseFilesAsync(currentPath, 10, currentContinuationToken, searchTerm);
+        isLoading = false;
+        StateHasChanged();
+    }
+
+    private async Task NavigateTo(string path)
+    {
+        currentPath = path;
+        currentContinuationToken = null;
+        tokenHistory.Clear();
+        searchTerm = "";
+        await LoadFiles();
+    }
+
+    private async Task OnItemClick(B2FileItem item)
+    {
+        if (item.IsFolder)
+        {
+             await NavigateTo(item.Key);
+        }
+    }
+
+    private List<(string Name, string Path)> GetBreadcrumbs()
+    {
+        var crumbs = new List<(string Name, string Path)>();
+        if (string.IsNullOrEmpty(currentPath)) return crumbs;
+
+        var parts = currentPath.Split('/', StringSplitOptions.RemoveEmptyEntries);
+        var builtPath = "";
+        
+        foreach (var part in parts)
+        {
+            builtPath += part + "/";
+            crumbs.Add((part, builtPath));
+        }
+        
+        return crumbs;
+    }
+
+    private string FormatSize(long bytes)
+    {
+        string[] sizes = { "B", "KB", "MB", "GB", "TB" };
+        double len = bytes;
+        int order = 0;
+        while (len >= 1024 && order < sizes.Length - 1)
+        {
+            order++;
+            len = len / 1024;
+        }
+        return $"{len:0.##} {sizes[order]}";
+    }
+    
+    // Search with debounce
+    private void OnSearchKeyUp()
+    {
+        searchDebounceTimer?.Stop();
+        searchDebounceTimer?.Dispose();
+        
+        searchDebounceTimer = new System.Timers.Timer(400);
+        searchDebounceTimer.Elapsed += async (s, e) =>
+        {
+            searchDebounceTimer?.Stop();
+            await InvokeAsync(async () =>
+            {
+                currentContinuationToken = null;
+                tokenHistory.Clear();
+                await LoadFiles();
+            });
+        };
+        searchDebounceTimer.AutoReset = false;
+        searchDebounceTimer.Start();
+    }
+    
+    private async Task ClearSearch()
+    {
+        searchTerm = "";
+        currentContinuationToken = null;
+        tokenHistory.Clear();
+        await LoadFiles();
+    }
+    
+    // Pagination
+    private async Task NextPage()
+    {
+        if (browserResponse?.HasMore == true && !string.IsNullOrEmpty(browserResponse.ContinuationToken))
+        {
+            tokenHistory.Push(currentContinuationToken);
+            currentContinuationToken = browserResponse.ContinuationToken;
+            await LoadFiles();
+        }
+    }
+    
+    private async Task PreviousPage()
+    {
+        if (tokenHistory.Count > 0)
+        {
+            currentContinuationToken = tokenHistory.Pop();
+            await LoadFiles();
+        }
+    }
+    
+    // Inspection Logic REUSED
+    private async Task InspectFile(string path)
+    {
+        var details = await ProductService.InspectFileVersionsAsync(path);
+        if (details != null)
+        {
+           inspectionResult = $"🔍 {L.Get("Admin.FileManager.InspectionReport")}\n\n" +
+                         $"{L.Get("Admin.FileManager.DetailsFile")}: {details.Path}\n" +
+                         $"{L.Get("Admin.FileManager.ActiveVersions")} {details.VersionCount}\n" +
+                         $"{L.Get("Admin.FileManager.Markers")} {details.DeleteMarkerCount}\n" +
+                         $"{L.Get("Admin.FileManager.Size")} {details.TotalSize / 1024.0 / 1024.0:F2} MB\n\n" +
+                         $"{L.Get("Admin.FileManager.Details")}\n" + string.Join("\n", details.Details);
+            
+           showInspectionModal = true;
+        }
+    }
+    
+    private void CloseInspectionModal()
+    {
+        showInspectionModal = false;
+    }
+
+    private async Task DownloadFile(B2FileItem item)
+    {
+        var url = await ProductService.GetB2DownloadUrlAsync(item.Key);
+        if (!string.IsNullOrEmpty(url))
+        {
+            await JSRuntime.InvokeVoidAsync("open", url, "_blank");
+        }
+        else
+        {
+            await JSRuntime.InvokeVoidAsync("alert", L.Get("Admin.FileManager.ErrorDownload"));
+        }
+    }
+
+    private async Task DeleteFile(B2FileItem item)
+    {
+        bool confirmed = await JSRuntime.InvokeAsync<bool>("confirm", String.Format(L.Get("Admin.FileManager.DeleteConfirmFull"), item.Name));
+        if (confirmed)
+        {
+            var success = await ProductService.DeleteB2FileAsync(item.Key);
+            if (success)
+            {
+                await LoadFiles(); // Refresh list
+            }
+            else
+            {
+                await JSRuntime.InvokeVoidAsync("alert", L.Get("Admin.FileManager.ErrorDelete"));
+            }
+        }
+    }
+}
+
+

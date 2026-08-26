@@ -1,0 +1,309 @@
+@page "/cart"
+@using BlazorClient.Core.Services
+@using BlazorClient.Models
+@using CartModel = BlazorClient.Models.Cart
+@inject ICartService CartService
+@inject NavigationManager Navigation
+@inject IClientLocaleService LocaleService
+@inject ILocalizationService L
+@implements IDisposable
+
+<section class="cart-page-heading">
+    <div class="container">
+        <nav aria-label="Breadcrumb" class="cart-breadcrumb">
+            <a href="/">@L.Get("Nav.Home")</a><span>/</span><span>@L.Get("Cart.Title")</span>
+        </nav>
+        <div class="cart-heading-row">
+            <div>
+                <h1>@L.Get("Cart.Title")</h1>
+                <p>Revise seus produtos antes de finalizar o pedido.</p>
+            </div>
+            <a href="/shop" class="cart-continue-link"><i class="ion-ios-arrow-left"></i> Continuar comprando</a>
+        </div>
+    </div>
+</section>
+
+<div class="shopping-cart-page">
+    <div class="container cart-container">
+        @if (_isLoading)
+        {
+            <div class="cart-empty-state text-center py-5">
+                <div class="spinner-border text-success" role="status">
+                    <span class="visually-hidden"></span>
+                </div>
+            </div>
+        }
+        else if (_cart == null || _cart.Items.Count == 0)
+        {
+            <div class="text-center py-5">
+                <div class="mb-4">
+                    <i class="ion-ios-cart-outline" style="font-size: 5rem; color: #e2e8f0;"></i>
+                </div>
+                <h3 class="fw-bold mb-3">@L.Get("Cart.Empty")</h3>
+                <p class="text-muted mb-4">Parece que você ainda não adicionou produtos ao seu carrinho.</p>
+                <a href="/shop" class="cart-empty-action btn btn-primary">
+                    @L.Get("Cart.ContinueShopping")
+                </a>
+            </div>
+        }
+        else
+        {
+            <div class="row">
+                <!-- Left Column: Items -->
+                <div class="col-lg-8">
+                    <div class="cart-items-column">
+                        <div class="d-flex justify-content-between align-items-center mb-4 pb-3 border-bottom">
+                            <h4 class="fw-bold mb-0">Itens no Carrinho (@_cart.Items.Count)</h4>
+                            <a href="javascript:void(0)" @onclick="ClearCart" class="text-danger text-decoration-none fw-bold small">
+                                <i class="ion-trash-a me-1"></i> @L.Get("Cart.EmptyCart")
+                            </a>
+                        </div>
+
+                        @foreach (var item in _cart.Items)
+                        {
+                            <div class="pro-cart-item">
+                                <img src="@(item.ProductImage ?? "assets/img/product/default-placeholder.png")" alt="@item.ProductTitle" class="pro-item-image">
+                                
+                                <div class="pro-item-details">
+                                    <div class="d-flex align-items-center mb-1">
+                                        <span class="pro-item-category me-2">Produto</span>
+                                        @if (item.IsDigital)
+                                        {
+                                            <span class="badge rounded-pill bg-success" style="font-size: 0.7rem;">@L.Get("Cart.Digital").ToUpper()</span>
+                                        }
+                                        else
+                                        {
+                                            <span class="badge rounded-pill bg-secondary" style="font-size: 0.7rem;">@L.Get("Cart.Physical").ToUpper()</span>
+                                        }
+                                    </div>
+                                    <a href="/product/@item.ProductId" class="pro-item-title">@item.ProductTitle</a>
+                                    
+                                    <div class="pro-item-variants mb-3">
+                                        @if (!string.IsNullOrEmpty(item.Color))
+                                        {
+                                            <span class="me-3"><strong>Cor:</strong> @item.Color</span>
+                                        }
+                                        @if (!string.IsNullOrEmpty(item.Size))
+                                        {
+                                            <span class="me-3"><strong>Tamanho:</strong> @item.Size</span>
+                                        }
+                                        @if (!string.IsNullOrEmpty(item.SelectedShippingName))
+                                        {
+                                            <div class="mt-1 text-muted small">
+                                                <i class="ion-ios-location-outline me-1"></i>
+                                                <strong>Frete:</strong> @item.SelectedShippingCompany - @item.SelectedShippingName
+                                                @if (item.SelectedShippingPrice.HasValue)
+                                                {
+                                                     <span>(@LocaleService.FormatPrice((double)item.SelectedShippingPrice.Value, null, item.DisplayCurrency))</span>
+                                                }
+                                                @if (!string.IsNullOrWhiteSpace(item.SelectedShippingDescription))
+                                                {
+                                                    <small class="d-block text-muted mt-1">@item.SelectedShippingDescription</small>
+                                                }
+                                            </div>
+                                        }
+                                    </div>
+
+                                    <div class="d-flex align-items-center justify-content-between mt-auto">
+                                        <div class="pro-qty-control">
+                                            <button type="button" class="qty-btn" @onclick="@(() => UpdateQtyManual(item, item.Quantity - 1))" disabled="@(item.Quantity <= 1 || item.IsDigital)">
+                                                <i class="ion-minus"></i>
+                                            </button>
+                                            <input type="number" class="qty-input" value="@item.Quantity" readonly />
+                                            <button type="button" class="qty-btn" @onclick="@(() => UpdateQtyManual(item, item.Quantity + 1))" disabled="@item.IsDigital">
+                                                <i class="ion-plus"></i>
+                                            </button>
+                                        </div>
+
+                                        <div class="pro-item-price-col">
+                                            @if (item.DisplayPrice * item.Quantity < (decimal?)(item.Price * item.Quantity)) // Example logic for sale
+                                            {
+                                                <span class="pro-unit-price">@LocaleService.FormatPrice(item.Price * item.Quantity, null, "BRL")</span>
+                                            }
+                                            <span class="pro-total-price">@LocaleService.FormatPrice(item.Price * item.Quantity, item.DisplayPrice * item.Quantity, item.DisplayCurrency)</span>
+                                        </div>
+
+                                        <button class="remove-btn" @onclick="@(() => RemoveItem(item))" title="Remover item">
+                                            <i class="ion-trash-b" style="font-size: 1.2rem;"></i>
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                        }
+                    </div>
+                    
+                    <div class="mt-4">
+                        <a href="/shop" class="text-decoration-none fw-bold">
+                            <i class="ion-ios-arrow-left me-2"></i> @L.Get("Cart.ContinueShopping")
+                        </a>
+                    </div>
+                </div>
+
+                <!-- Right Column: Summary -->
+                <div class="col-lg-4">
+                    <div class="pro-cart-summary">
+                        <h4 class="summary-title">Resumo do Pedido</h4>
+                        
+                        <div class="summary-row">
+                            <span class="label">@L.Get("Cart.Subtotal")</span>
+                            <span class="value">@LocaleService.FormatPrice(_cart.SubTotal, _cart.DisplaySubTotal, _cart.DisplayCurrency)</span>
+                        </div>
+
+                        @if (GetTotalShipping() > 0)
+                        {
+                            <div class="summary-row">
+                                <span class="label">@L.Get("Cart.Shipping")</span>
+                                <span class="value">@L.FormatCurrency(GetTotalShipping())</span>
+                            </div>
+                        }
+                        else
+                        {
+                            <div class="summary-row">
+                                <span class="label">@L.Get("Cart.Shipping")</span>
+                                <span class="value text-success">Grátis</span>
+                            </div>
+                        }
+
+                        <div class="summary-row total">
+                            <span class="label">@L.Get("Cart.Total")</span>
+                            <span class="value">@GetGrandTotalFormatted()</span>
+                        </div>
+
+                        <div class="mt-4">
+                            <p class="text-muted small mb-4">
+                                <i class="ion-ios-information-outline me-1"></i> Taxas e frete calculados no checkout.
+                            </p>
+                            <a href="/checkout" class="checkout-btn btn">
+                                @L.Get("Cart.ProceedToCheckout")
+                            </a>
+                        </div>
+
+
+                    </div>
+                </div>
+            </div>
+        }
+    </div>
+</div>
+
+@code {
+    private CartModel? _cart;
+    private bool _isLoading = true;
+
+    protected override async Task OnInitializedAsync()
+    {
+        LocaleService.OnChange += HandleLocaleChange;
+        L.OnLanguageChanged += HandleLanguageChanged;
+        await LoadCart();
+    }
+
+    private async void HandleLocaleChange()
+    {
+        await LoadCart();
+        StateHasChanged();
+    }
+
+    public void Dispose()
+    {
+        LocaleService.OnChange -= HandleLocaleChange;
+        L.OnLanguageChanged -= HandleLanguageChanged;
+    }
+
+    private void HandleLanguageChanged()
+    {
+        InvokeAsync(StateHasChanged);
+    }
+
+    private async Task LoadCart()
+    {
+        _isLoading = true;
+        _cart = await CartService.GetCart(LocaleService.CurrentLocale.Currency);
+        _isLoading = false;
+    }
+    
+    private async Task UpdateQtyManual(CartItem item, int newQuantity)
+    {
+        if (newQuantity >= 1)
+        {
+            await CartService.UpdateQuantity(item.ProductId, newQuantity, item.Color, item.Size, LocaleService.CurrentLocale.Currency);
+            _cart = await CartService.GetCart(LocaleService.CurrentLocale.Currency);
+        }
+    }
+
+    private async Task RefreshCart()
+    {
+        await LoadCart();
+    }
+
+    private async Task UpdateQuantity(CartItem item, ChangeEventArgs e)
+    {
+        if (int.TryParse(e.Value?.ToString(), out int quantity))
+        {
+            if (quantity > 0)
+            {
+                await CartService.UpdateQuantity(item.ProductId, quantity, item.Color, item.Size, LocaleService.CurrentLocale.Currency);
+                // Refresh cart to get updated totals if needed, or rely on service state
+                _cart = await CartService.GetCart(LocaleService.CurrentLocale.Currency);
+            }
+        }
+    }
+
+    private async Task RemoveItem(CartItem item)
+    {
+        await CartService.RemoveItem(item.ProductId, item.Color, item.Size, LocaleService.CurrentLocale.Currency);
+        _cart = await CartService.GetCart(LocaleService.CurrentLocale.Currency);
+    }
+
+    private async Task ClearCart()
+    {
+        await CartService.ClearCart();
+        _cart = await CartService.GetCart(LocaleService.CurrentLocale.Currency);
+    }
+    
+    /// <summary>
+    /// Calculate total shipping cost from all cart items
+    /// </summary>
+    private decimal GetTotalShipping()
+    {
+        if (_cart == null || _cart.Items == null) return 0;
+        
+        decimal total = 0;
+        foreach (var item in _cart.Items)
+        {
+            // Only count shipping for physical items that have a shipping option selected
+            if (!item.IsDigital && item.SelectedShippingPrice.HasValue)
+            {
+                total += item.SelectedShippingPrice.Value;
+            }
+        }
+        
+        return total;
+    }
+    
+    /// <summary>
+    /// Calculate grand total including products and shipping
+    /// </summary>
+    private string GetGrandTotalFormatted()
+    {
+        if (_cart == null) return LocaleService.FormatPrice(0, 0, "BRL");
+        
+        // Use backend DisplayTotal if available for products part
+        decimal productTotal = _cart.DisplayTotal ?? (decimal)_cart.Total;
+        decimal shippingTotal = GetTotalShipping();
+        
+        // If we have display currency, we assume productTotal is already converted.
+        // Shipping is NOT converted yet (assumed BRL).
+        // Mixing currencies is bad. 
+        // Ideally we convert shipping. For now, if currency != BRL, we just show productTotal (warn user?) or just try to sum if simplistic.
+        // Actually, let's just display what we have.
+        
+        // If DisplayTotal exists (Currency != BRL), we can't easily add BRL shipping.
+        if (_cart.DisplayTotal.HasValue && _cart.DisplayCurrency != "BRL")
+        {
+             // Fallback: Just show Product Total + " + Frete (R$ ...)"
+             return $"{LocaleService.FormatPrice(_cart.Total, _cart.DisplayTotal, _cart.DisplayCurrency)} + {L.Get("Cart.Shipping")} ({shippingTotal:C})";
+        }
+
+        return LocaleService.FormatPrice((double)(productTotal + shippingTotal), productTotal + shippingTotal, "BRL");
+    }
+}

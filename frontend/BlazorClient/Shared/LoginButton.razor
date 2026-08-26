@@ -1,0 +1,78 @@
+@using BlazorClient.Core.Services
+@inject IAuthService AuthService
+@inject NavigationManager Navigation
+@inject AuthenticationStateProvider AuthStateProvider
+@inject ILocalizationService L
+@implements IDisposable
+
+<AuthorizeView>
+    <Authorized>
+        <MudMenu AnchorOrigin="Origin.BottomRight" TransformOrigin="Origin.TopRight" Dense="true" Class="ml-2" ActivationEvent="@MouseEvent.LeftClick" LockScroll="true">
+            <ActivatorContent>
+                <MudAvatar Color="Color.Primary" Variant="Variant.Filled" Size="Size.Medium" Class="cursor-pointer">
+                    @if (!string.IsNullOrEmpty(context.User.Claims.FirstOrDefault(c => c.Type == "PhotoUrl")?.Value))
+                    {
+                        <img src="@context.User.Claims.FirstOrDefault(c => c.Type == "PhotoUrl")?.Value" style="width:100%;height:100%;object-fit:cover;" />
+                    }
+                    else
+                    {
+                        @(context.User.Identity?.Name?.Substring(0, 1).ToUpper() ?? "U")
+                    }
+                </MudAvatar>
+            </ActivatorContent>
+            <ChildContent>
+                <div class="pa-4 pb-2">
+                    <MudText Typo="Typo.subtitle2">@context.User.Identity?.Name</MudText>
+                    <MudText Typo="Typo.caption" Class="ynex-text-muted">@context.User.Claims.FirstOrDefault(c => c.Type == "email")?.Value</MudText>
+                </div>
+                <MudDivider Class="my-2" />
+                <a href="/my-account/profile" class="mud-list-item mud-list-item-dense mud-menu-item mud-ripple" style="display: flex; align-items: center; padding: 11px 16px; color: inherit; text-decoration: none;">
+                    <MudIcon Icon="@Icons.Material.Filled.Person" Class="mr-2"/>
+                    @L.Get("Nav.MyProfile")
+                </a>
+                <a href="/my-account/orders" class="mud-list-item mud-list-item-dense mud-menu-item mud-ripple" style="display: flex; align-items: center; padding: 11px 16px; color: inherit; text-decoration: none;">
+                    <MudIcon Icon="@Icons.Material.Filled.ListAlt" Class="mr-2"/>
+                    @L.Get("Nav.MyOrders")
+                </a>
+                <a href="/my-account/downloads" class="mud-list-item mud-list-item-dense mud-menu-item mud-ripple" style="display: flex; align-items: center; padding: 11px 16px; color: inherit; text-decoration: none;">
+                    <MudIcon Icon="@Icons.Material.Filled.Download" Class="mr-2"/>
+                    Downloads
+                </a>
+                <MudDivider Class="my-2" />
+                <MudMenuItem Icon="@Icons.Material.Filled.Logout" OnClick="Logout" Class="text-error">@L.Get("Nav.Logout")</MudMenuItem>
+            </ChildContent>
+        </MudMenu>
+    </Authorized>
+    <NotAuthorized>
+        <MudButton Variant="Variant.Filled" Color="Color.Primary" 
+                   StartIcon="@Icons.Material.Filled.Login" 
+                   OnClick='() => Navigation.NavigateTo("/login")'
+                   Class="rounded-lg fw-bold px-4">
+            @L.Get("Nav.Login")
+        </MudButton>
+    </NotAuthorized>
+</AuthorizeView>
+
+@code {
+    protected override void OnInitialized()
+    {
+        L.OnLanguageChanged += HandleLanguageChanged;
+    }
+
+    private void HandleLanguageChanged()
+    {
+        InvokeAsync(StateHasChanged);
+    }
+
+    private async Task Logout()
+    {
+        await AuthService.SignOut();
+        await ((CustomAuthenticationStateProvider)AuthStateProvider).RefreshAuthenticationState();
+        Navigation.NavigateTo("/", true);
+    }
+
+    public void Dispose()
+    {
+        L.OnLanguageChanged -= HandleLanguageChanged;
+    }
+}

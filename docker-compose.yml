@@ -1,0 +1,94 @@
+services:
+  frontend:
+    build:
+      context: ./frontend/BlazorClient
+      dockerfile: Dockerfile
+    ports:
+      - "5289:80"
+    depends_on:
+      api:
+        condition: service_started
+
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      - "5288:8080"
+    volumes:
+      - idealcreative-dataprotection:/home/app/.aspnet/DataProtection-Keys
+    environment:
+      ASPNETCORE_ENVIRONMENT: Development
+      ConnectionStrings__DefaultConnection: Host=postgres;Port=5432;Database=idealcreative;Username=idealcreative;Password=idealcreative_dev
+      Jwt__Issuer: idealcreative.local
+      Jwt__Key: ${JWT_KEY:-local-only-change-this-key-before-production-2026}
+      Security__DataProtectionCertificate__Path: ${DATA_PROTECTION_CERT_PATH:-}
+      Security__DataProtectionCertificate__Password: ${DATA_PROTECTION_CERT_PASSWORD:-}
+      Admin__Email: ${ADMIN_EMAIL:-admin@idealcreative.local}
+      Admin__Password: ${ADMIN_PASSWORD:-IdealCreative#2026}
+      Storage__Endpoint: ${STORAGE_ENDPOINT:-minio:9000}
+      Storage__AccessKey: ${STORAGE_ACCESS_KEY:-idealcreative}
+      Storage__SecretKey: ${STORAGE_SECRET_KEY:-idealcreative_dev_password}
+      Storage__Bucket: ${STORAGE_BUCKET:-idealcreative}
+      Storage__PublicBaseUrl: ${STORAGE_PUBLIC_BASE_URL:-http://localhost:5288/api/storage/public}
+      Storage__UseSsl: ${STORAGE_USE_SSL:-false}
+      Frontend__PublicUrl: http://localhost:5289
+      Cors__Origins__0: http://localhost:5289
+      Payments__PayPal__BaseUrl: ${PAYPAL_BASE_URL:-https://api-m.sandbox.paypal.com}
+      Payments__MercadoPago__AccessToken: ${MERCADOPAGO_ACCESS_TOKEN:-}
+      Payments__PayPal__ClientId: ${PAYPAL_CLIENT_ID:-}
+      Payments__PayPal__Secret: ${PAYPAL_SECRET:-}
+      Payments__PayPal__WebhookSecret: ${PAYPAL_WEBHOOK_SECRET:-}
+      Payments__MercadoPago__WebhookSecret: ${MERCADOPAGO_WEBHOOK_SECRET:-}
+      Email__Smtp__Host: ${SMTP_HOST:-mailpit}
+      Email__Smtp__Port: ${SMTP_PORT:-1025}
+      Email__Smtp__UseSsl: ${SMTP_USE_SSL:-false}
+      Email__Smtp__Username: ${SMTP_USERNAME:-}
+      Email__Smtp__Password: ${SMTP_PASSWORD:-}
+      Email__Smtp__FromEmail: ${SMTP_FROM_EMAIL:-no-reply@idealcreative.local}
+      Email__Smtp__FromName: ${SMTP_FROM_NAME:-IdealCreative}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      minio:
+        condition: service_started
+      mailpit:
+        condition: service_started
+
+  mailpit:
+    image: axllent/mailpit:v1.27
+    ports:
+      - "59102:8025"
+
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: idealcreative
+      POSTGRES_USER: idealcreative
+      POSTGRES_PASSWORD: idealcreative_dev
+    ports:
+      - "55432:5432"
+    volumes:
+      - idealcreative-postgres:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U idealcreative -d idealcreative"]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+
+  minio:
+    image: minio/minio:latest
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: idealcreative
+      MINIO_ROOT_PASSWORD: idealcreative_dev_password
+    ports:
+      - "59100:9000"
+      - "59101:9001"
+    volumes:
+      - idealcreative-minio:/data
+
+volumes:
+  idealcreative-postgres:
+  idealcreative-minio:
+  idealcreative-dataprotection:

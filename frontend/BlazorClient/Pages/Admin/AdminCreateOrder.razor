@@ -1,0 +1,407 @@
+@using BlazorClient.Core.Interfaces
+@page "/admin/orders/create/{UserId}"
+@using BlazorClient.Core.Services
+@using BlazorClient.Models
+@layout AdminLayout
+@attribute [Authorize(Roles = "Admin")]
+@inject IProductService ProductService
+@inject IOrderService OrderService
+@inject IUserService UserService
+@inject NavigationManager NavigationManager
+@inject IJSRuntime JSRuntime
+@inject ILocalizationService L
+@inject ISnackbar Snackbar
+
+<PageTitle>Nova compra manual - Admin</PageTitle>
+
+<div class="admin-page-header ic-admin-page-heading d-flex justify-content-between align-items-end mb-4">
+    <div><span class="ic-admin-kicker">VENDA ASSISTIDA</span><h1>Nova compra manual</h1><p>Selecione produtos e confirme a compra em nome do cliente.</p></div>
+    <a href="/admin/users" class="btn btn-outline-secondary"><i class="fa fa-arrow-left"></i> Voltar aos clientes</a>
+</div>
+
+<div class="row">
+    <!-- LEFT COLUMN: Product Selection -->
+    <div class="col-md-8">
+        <div class="card shadow mb-4">
+            <div class="card-header py-3 d-flex flex-row align-items-center justify-content-between">
+                <h6 class="m-0 font-weight-bold text-primary">Selecionar produtos</h6>
+            </div>
+            <div class="card-body">
+                <!-- Filters -->
+                <div class="row mb-3">
+                    <div class="col-md-4">
+                        <input type="text" class="form-control" placeholder="Buscar produtos por nome..."
+                               @bind="searchText" @bind:event="oninput" @onkeyup="FilterProducts" />
+                    </div>
+                    <div class="col-md-3">
+                        <select class="form-control" @onchange="OnCategoryChanged">
+                            <option value="">@L.Get("Admin.Products.AllCategories")</option>
+                            @if (categories != null)
+                            {
+                                @foreach (var cat in categories)
+                                {
+                                    <option value="@cat.Id">@cat.Title</option>
+                                }
+                            }
+                        </select>
+                    </div>
+                    <div class="col-md-3">
+                        <select class="form-control" @onchange="OnTagChanged">
+                            <option value="">@L.Get("Admin.Products.AllTags")</option>
+                            @if (tags != null)
+                            {
+                                @foreach (var tag in tags)
+                                {
+                                    <option value="@tag.Title">@tag.Title</option>
+                                }
+                            }
+                        </select>
+                    </div>
+                    <div class="col-md-2">
+                        <button class="btn btn-primary btn-block" @onclick="LoadProducts">
+                            <i class="fa fa-search"></i>
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Product List -->
+                @if (products == null)
+                {
+                    <div class="text-center">
+                        <div class="spinner-border text-primary" role="status"></div>
+                    </div>
+                }
+                else if (!products.Any())
+                {
+                    <div class="alert alert-info">@L.Get("Admin.Products.NoProductsFound")</div>
+                }
+                else
+                {
+                    <div class="table-responsive">
+                        <table class="table table-bordered ic-admin-mobile-table">
+                            <thead>
+                                <tr>
+                                    <th>@L.Get("Admin.Common.Product")</th>
+                                    <th>@L.Get("Admin.Common.PriceLabel")</th>
+                                    <th>@L.Get("Admin.Common.Stock")</th>
+                                    <th>@L.Get("Admin.Common.Actions")</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @foreach (var product in products)
+                                {
+                                    <tr>
+                                        <td data-label="Produto">
+                                            <div class="d-flex align-items-center">
+                                                @if (!string.IsNullOrEmpty(product.ImageName))
+                                                {
+                                                    <img src="@product.ImageName" alt="@product.Title" style="width: 40px; height: 40px; object-fit: cover;" class="mr-2 rounded" />
+                                                }
+                                                <div>
+                                                    <strong>@product.Title</strong>
+                                                    @if(IsSelected(product.Id))
+                                                    {
+                                                        <span class="badge badge-success ml-2">@L.Get("Admin.Orders.Selected")</span>
+                                                    }
+                                                </div>
+                                            </div>
+                                        </td>
+                                        <td data-label="Preço">@L.FormatCurrency(product.Price)</td>
+                                        <td data-label="Estoque">@product.Qty</td>
+                                        <td data-label="Ações">
+                                            <button class="btn btn-sm btn-outline-primary" @onclick="() => AddToCart(product)" disabled="@(product.Qty <= 0)">
+                                                @L.Get("Admin.Common.Add")
+                                            </button>
+                                        </td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+
+                    <!-- Pagination -->
+                    <nav aria-label="Page navigation">
+                        <ul class="pagination justify-content-center">
+                            <li class="page-item @(currentPage == 1 ? "disabled" : "")">
+                                <button class="page-link" @onclick="PreviousPage">@L.Get("Admin.Common.Previous")</button>
+                            </li>
+                            <li class="page-item disabled">
+                                <span class="page-link">@L.Get("Admin.Common.PageLabel") @currentPage</span>
+                            </li>
+                            <li class="page-item @(products.Count < pageSize ? "disabled" : "")">
+                                <button class="page-link" @onclick="NextPage">@L.Get("Admin.Common.Next")</button>
+                            </li>
+                        </ul>
+                    </nav>
+                }
+            </div>
+        </div>
+    </div>
+
+    <!-- RIGHT COLUMN: Order Summary -->
+    <div class="col-md-4">
+        <div class="card shadow mb-4">
+            <div class="card-header py-3">
+                <h6 class="m-0 font-weight-bold text-primary">@L.Get("Admin.Orders.OrderSummary")</h6>
+            </div>
+            <div class="card-body">
+                @if (targetUser != null)
+                {
+                    <div class="mb-3 border-bottom pb-2">
+                        <strong>@L.Get("Admin.Orders.Customer")</strong> @(targetUser.DisplayName ?? targetUser.Email)<br/>
+                        <small class="text-muted">@targetUser.Email</small>
+                    </div>
+                }
+
+                @if (!selectedItems.Any())
+                {
+                    <div class="text-center text-muted py-4">
+                        <i class="fa fa-shopping-cart fa-3x mb-2"></i><br/>
+                        @L.Get("Admin.Orders.NoProductsSelected")
+                    </div>
+                }
+                else
+                {
+                    <ul class="list-group mb-3">
+                        @foreach (var item in selectedItems)
+                        {
+                            <li class="list-group-item d-flex justify-content-between lh-condensed">
+                                <div>
+                                    <h6 class="my-0">@item.ProductTitle</h6>
+                                    <small class="text-muted">@L.FormatCurrency(item.Price) x @item.Quantity</small>
+                                </div>
+                                <span class="text-muted">
+                                    <div class="input-group input-group-sm" style="width: 100px;">
+                                        <input type="number" class="form-control" value="@item.Quantity" 
+                                               @onchange="@(e => UpdateQuantity(item, e))" min="1" max="@item.MaxStock" />
+                                        <div class="input-group-append">
+                                            <button class="btn btn-outline-danger" type="button" @onclick="() => RemoveFromCart(item)">
+                                                <i class="fa fa-times"></i>
+                                            </button>
+                                        </div>
+                                    </div>
+                                    <div class="text-right mt-1">
+                                        @L.FormatCurrency(item.Price * item.Quantity)
+                                    </div>
+                                </span>
+                            </li>
+                        }
+                        <li class="list-group-item d-flex justify-content-between">
+                            <span>@L.Get("Admin.Common.Total")</span>
+                            <strong>@L.FormatCurrency((decimal)selectedItems.Sum(i => i.Price * i.Quantity))</strong>
+                        </li>
+                    </ul>
+
+                    <button class="btn btn-success btn-lg btn-block" @onclick="SubmitOrder" disabled="@isSubmitting">
+                        @if (isSubmitting)
+                        {
+                            <span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span>
+                            <span>@L.Get("Checkout.Processing")</span>
+                        }
+                        else
+                        {
+                            <span>@L.Get("Admin.Orders.ConfirmOrder")</span>
+                        }
+                    </button>
+                }
+            </div>
+        </div>
+    </div>
+</div>
+
+@code {
+    [Parameter]
+    public string UserId { get; set; } = "";
+
+    private UserDto? targetUser;
+    private List<Product>? products;
+    private List<Category>? categories;
+    private List<Tag>? tags;
+
+    // Filters & Pagination
+    private int currentPage = 1;
+    private int pageSize = 10;
+    private string searchText = "";
+    private string selectedCategoryId = "";
+    private string selectedTag = "";
+    
+    // Selection state
+    private List<AdminCartItem> selectedItems = new();
+    private bool isSubmitting = false;
+
+    // Helper model for UI cart items
+    private class AdminCartItem
+    {
+        public string ProductId { get; set; } = "";
+        public string ProductTitle { get; set; } = "";
+        public double Price { get; set; }
+        public int Quantity { get; set; }
+        public int MaxStock { get; set; }
+    }
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadUser();
+        await LoadMetadata(); // Categories & Tags
+        await LoadProducts();
+    }
+
+    private async Task LoadUser()
+    {
+        try 
+        {
+            var response = await UserService.GetAllUsers(1, 100, null);
+            targetUser = response?.Items?.FirstOrDefault(u => u.Uid == UserId);
+            if (targetUser == null)
+            {
+                Snackbar.Add(L.Get("Admin.Users.UserNotFound"), Severity.Error);
+                NavigationManager.NavigateTo("/admin/users");
+            }
+        }
+        catch(Exception ex)
+        {
+             Console.WriteLine($"{L.Get("Admin.Users.ErrorLoadingUser")}: {ex.Message}");
+        }
+    }
+
+    private async Task LoadMetadata()
+    {
+        categories = await ProductService.GetCategoriesAsync();
+        tags = await ProductService.GetTagsAsync();
+    }
+
+    private async Task LoadProducts()
+    {
+        try
+        {
+            // Note: API search logic might be limited, but we pass what we can
+            // Assuming API supports simple filtering. If text search is needed locally, we might need a search endpoint.
+            // Using standard GetProductsAsync
+            var response = await ProductService.GetProductsAsync(currentPage, pageSize, selectedCategoryId, null, selectedTag);
+            products = response.Items;
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"{L.Get("Admin.Products.LoadError")}: {ex.Message}");
+        }
+    }
+
+    private async Task OnCategoryChanged(ChangeEventArgs e)
+    {
+        selectedCategoryId = e.Value?.ToString() ?? "";
+        currentPage = 1;
+        await LoadProducts();
+    }
+
+    private async Task OnTagChanged(ChangeEventArgs e)
+    {
+        selectedTag = e.Value?.ToString() ?? "";
+        currentPage = 1;
+        await LoadProducts();
+    }
+    
+    // Debounce/simple search trigger
+    private void FilterProducts()
+    {
+        // Ideally utilize a Search endpoint if available for text search
+        // For now, if API only supports tag/category, text search might require client-side filter or new endpoint.
+        // Assuming user uses filters mainly. Search text is currently decorative unless we implement a search endpoint.
+    }
+
+    private async Task NextPage()
+    {
+        currentPage++;
+        await LoadProducts();
+    }
+
+    private async Task PreviousPage()
+    {
+        if (currentPage > 1)
+        {
+            currentPage--;
+            await LoadProducts();
+        }
+    }
+
+    private void AddToCart(Product product)
+    {
+        var existing = selectedItems.FirstOrDefault(i => i.ProductId == product.Id);
+        if (existing != null)
+        {
+            if (existing.Quantity < product.Qty)
+            {
+                existing.Quantity++;
+            }
+        }
+        else
+        {
+            selectedItems.Add(new AdminCartItem
+            {
+                ProductId = product.Id,
+                ProductTitle = product.Title,
+                Price = product.Price,
+                Quantity = 1,
+                MaxStock = product.Qty
+            });
+        }
+    }
+
+    private void RemoveFromCart(AdminCartItem item)
+    {
+        selectedItems.Remove(item);
+    }
+
+    private void UpdateQuantity(AdminCartItem item, ChangeEventArgs e)
+    {
+        if (int.TryParse(e.Value?.ToString(), out int qty))
+        {
+            if (qty > 0 && qty <= item.MaxStock)
+            {
+                item.Quantity = qty;
+            }
+            else if (qty > item.MaxStock)
+            {
+                 item.Quantity = item.MaxStock; // Cap at max stock
+                 // Ideally show toast
+            }
+        }
+    }
+
+    private bool IsSelected(string productId)
+    {
+        return selectedItems.Any(i => i.ProductId == productId);
+    }
+
+    private async Task SubmitOrder()
+    {
+        if (!selectedItems.Any()) return;
+        
+        isSubmitting = true;
+        try
+        {
+            var request = new AdminPurchaseRequest
+            {
+                UserId = UserId,
+                Items = selectedItems.Select(i => new AdminPurchaseItem 
+                { 
+                    ProductId = i.ProductId, 
+                    Quantity = i.Quantity 
+                }).ToList()
+            };
+
+            await OrderService.CreateAdminPurchase(request);
+            
+            Snackbar.Add(L.Get("Admin.Orders.OrderCreatedSuccess"), Severity.Success);
+            NavigationManager.NavigateTo("/admin/users");
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add(ex.Message, Severity.Error);
+        }
+        finally
+        {
+            isSubmitting = false;
+        }
+    }
+}
+

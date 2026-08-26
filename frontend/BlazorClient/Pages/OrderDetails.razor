@@ -1,0 +1,630 @@
+@page "/my-account/order/{Id}"
+@using BlazorClient.Core.Services
+@using BlazorClient.Models
+@using Microsoft.AspNetCore.Authorization
+@attribute [Authorize]
+@inject IOrderService OrderService
+@inject IJSRuntime JSRuntime
+@inject ILocalizationService L
+@inject NavigationManager Navigation
+
+<div class="breadcrumbs_area mt-5">
+    <div class="container">
+        <div class="row">
+            <div class="col-12">
+                <div class="breadcrumb_content">
+                    <ul>
+                        <li><a href="/">@L.Get("Nav.Home")</a></li>
+                        <li><a href="/my-account/orders">@L.Get("Nav.MyOrders")</a></li>
+                        <li>@L.Get("OrderDetails.Title")</li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<section class="main_content_area">
+    <div class="container">
+        @if (isLoading)
+        {
+            <BlazorClient.Components.SkeletonLoader Type="BlazorClient.Components.SkeletonLoader.LoaderType.OrderDetail" />
+        }
+        else if (order == null)
+        {
+            <div class="row justify-content-center py-5">
+                <div class="col-md-6 text-center">
+                    <div class="alert alert-warning shadow-sm">
+                        <i class="fa fa-exclamation-triangle me-2"></i> @L.Get("Common.Error")
+                    </div>
+                    <a href="/my-account/orders" class="btn btn-primary mt-3">
+                        <i class="fa fa-arrow-left"></i> @L.Get("OrderDetails.Back")
+                    </a>
+                </div>
+            </div>
+        }
+        else
+        {
+            <div class="row mb-4 align-items-center">
+                <div class="col-md-6">
+                    <h2 class="mb-0">@L.Get("MyAccountPage.TableOrder") #<span class="text-primary">@Id</span></h2>
+                    <p class="text-muted mb-0">@L.FormatDateTime(order.CreatedAt?.ToLocalTime())</p>
+                </div>
+                <div class="col-md-6 text-md-right mt-3 mt-md-0">
+                    <a href="/my-account/orders" class="btn btn-outline-secondary">
+                        <i class="fa fa-arrow-left"></i> @L.Get("Common.Back")
+                    </a>
+                </div>
+            </div>
+
+            <div class="row">
+                <!-- Coluna Principal: Itens do Pedido -->
+                <div class="col-lg-8">
+                    <div class="card shadow-sm mb-4 border-0">
+                        <div class="card-header bg-white border-bottom-0 pt-4 px-4">
+                            <h5 class="mb-0"><i class="fa fa-shopping-bag text-primary me-2"></i> @L.Get("OrderDetails.Items")</h5>
+                        </div>
+                        <div class="card-body p-0">
+                            <!-- Desktop View: Table -->
+                            <div class="table-responsive d-none d-md-block">
+                                <table class="table mb-0">
+                                    <thead class="bg-light">
+                                        <tr>
+                                            <th class="ps-4 py-3" style="width: 50%;">@L.Get("OrderDetails.Product")</th>
+                                            <th class="py-3 text-center">@L.Get("OrderDetails.Price")</th>
+                                            <th class="py-3 text-center">@L.Get("OrderDetails.Quantity")</th>
+                                            <th class="pe-4 py-3 text-end">@L.Get("OrderDetails.Total")</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        @foreach (var item in order.Items)
+                                        {
+                                            <tr>
+                                                <td class="ps-4 py-3">
+                                                    <div class="d-flex align-items-center">
+                                                        <div class="flex-shrink-0 me-3">
+                                                            @if (!string.IsNullOrEmpty(item.ProductImage))
+                                                            {
+                                                                <img src="@item.ProductImage" alt="@item.ProductTitle" class="img-fluid rounded" style="width: 60px; height: 60px; object-fit: cover;">
+                                                            }
+                                                            else
+                                                            {
+                                                                <div class="bg-light rounded d-flex align-items-center justify-content-center" style="width: 60px; height: 60px;">
+                                                                    <i class="fa fa-image text-muted"></i>
+                                                                </div>
+                                                            }
+                                                        </div>
+                                                        <div>
+                                                            <h6 class="mb-1"><a href="/product/@item.ProductId" class="text-dark text-decoration-none hover-primary">@item.ProductTitle</a></h6>
+                                                            <div class="small text-muted">
+                                                                @if (!string.IsNullOrEmpty(item.Size)) { <span class="me-2">@L.Get("OrderDetails.Size") @item.Size</span> }
+                                                                @if (!string.IsNullOrEmpty(item.Color)) { <span>@L.Get("OrderDetails.Color") @item.Color</span> }
+                                                            </div>
+                                                            @if(item.IsDigital)
+                                                            {
+                                                                <span class="badge bg-info text-dark mt-1" style="font-size: 0.7em;"><i class="fa fa-download"></i> @L.Get("OrderDetails.Digital")</span>
+                                                            }
+                                                        </div>
+                                                    </div>
+                                                </td>
+                                                <td class="py-3 text-center align-middle">@L.FormatCurrency(item.Price)</td>
+                                                <td class="py-3 text-center align-middle">@item.Quantity</td>
+                                                <td class="pe-4 py-3 text-end align-middle fw-bold">@L.FormatCurrency(item.Price * item.Quantity)</td>
+                                            </tr>
+                                        }
+                                    </tbody>
+                                </table>
+                            </div>
+
+                            <!-- Mobile View: Item Cards -->
+                            <div class="d-md-none p-3 bg-light">
+                                @foreach (var item in order.Items)
+                                {
+                                    <div class="card shadow-sm mb-3 border-0">
+                                        <div class="card-body p-3 d-flex align-items-center">
+                                            <!-- Product Image -->
+                                            <div class="flex-shrink-0 me-3">
+                                                 @if (!string.IsNullOrEmpty(item.ProductImage))
+                                                 {
+                                                     <img src="@item.ProductImage" alt="@item.ProductTitle" class="rounded" style="width: 70px; height: 70px; object-fit: cover;">
+                                                 }
+                                                 else
+                                                 {
+                                                     <div class="bg-light rounded d-flex align-items-center justify-content-center" style="width: 70px; height: 70px;">
+                                                         <i class="fa fa-image text-muted fa-2x"></i>
+                                                     </div>
+                                                 }
+                                            </div>
+                                            
+                                            <!-- Product Info -->
+                                            <div class="flex-grow-1 overflow-hidden">
+                                                <h6 class="mb-1 fw-bold text-truncate"><a href="/product/@item.ProductId" class="text-dark text-decoration-none">@item.ProductTitle</a></h6>
+                                                
+                                                <div class="small text-muted mb-2">
+                                                    @if (!string.IsNullOrEmpty(item.Size)) { <span class="me-2 badge bg-light text-dark border">@item.Size</span> }
+                                                    @if (!string.IsNullOrEmpty(item.Color)) { <span class="badge bg-light text-dark border">@item.Color</span> }
+                                                </div>
+
+                                                <div class="d-flex justify-content-between align-items-end">
+                                                    <div>
+                                                        <span class="text-muted small">Qtd: @item.Quantity</span>
+                                                        @if(item.IsDigital)
+                                                        {
+                                                            <i class="fa fa-cloud-download text-info ms-1" title="Digital"></i>
+                                                        }
+                                                    </div>
+                                                    <div class="fw-bold text-primary">@L.FormatCurrency(item.Price * item.Quantity)</div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                }
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="card shadow-sm mb-4 border-0">
+                        <div class="card-body p-4">
+                            <h5 class="mb-3"><i class="fa fa-calculator text-primary me-2"></i>Resumo do pedido</h5>
+                            <div class="d-flex justify-content-between mb-2">
+                                <span class="text-muted">Subtotal</span>
+                                <span>@L.FormatCurrency(order.SubTotal)</span>
+                            </div>
+                            @if (order.DiscountAmount > 0)
+                            {
+                                <div class="d-flex justify-content-between mb-2 text-success">
+                                    <span>Desconto@(string.IsNullOrWhiteSpace(order.CouponCode) ? "" : $" ({order.CouponCode})")</span>
+                                    <span>-@L.FormatCurrency(order.DiscountAmount)</span>
+                                </div>
+                            }
+                            <div class="d-flex justify-content-between mb-3">
+                                <span class="text-muted">Frete</span>
+                                <span>@GetShippingSummary()</span>
+                            </div>
+                            <div class="d-flex justify-content-between border-top pt-3 fs-5 fw-bold">
+                                <span>Total</span>
+                                <span class="text-primary">@L.FormatCurrency(order.Total)</span>
+                            </div>
+                        </div>
+                    </div>
+
+                </div>
+
+                <!-- Coluna Lateral: Informações -->
+                <div class="col-lg-4">
+                    <!-- Status do Pedido -->
+                    <div class="card shadow-sm mb-4 border-0">
+                        <div class="card-body p-4">
+                            <h5 class="card-title mb-3"><i class="fa fa-info-circle text-primary me-2"></i> @L.Get("OrderDetails.Status")</h5>
+                            <div class="d-flex align-items-center mb-3">
+                                <div class="flex-grow-1">
+                                    <span class="d-block text-muted small text-uppercase fw-bold">@L.Get("OrderDetails.CurrentStatus")</span>
+                                    <span class="badge @GetBadgeClass(order.Status) p-2 mt-1" style="font-size: 0.9em;">@GetStatusText(order.Status)</span>
+                                </div>
+                            </div>
+                            <!-- Se tiver downloads digitais, botão de atalho -->
+                            @if(order.Items.Any(i => i.IsDigital))
+                            {
+                                <div class="mt-3 pt-3 border-top">
+                                    <a href="/my-account/downloads" class="btn btn-outline-primary btn-sm w-100">
+                                        <i class="fa fa-download me-1"></i> @L.Get("Nav.MyDownloads")
+                                    </a>
+                                </div>
+                            }
+                        </div>
+                    </div>
+
+                    <!-- Informações de Entrega -->
+                    <div class="card shadow-sm mb-4 border-0">
+                        <div class="card-body p-4">
+                            <h5 class="card-title mb-3"><i class="fa fa-truck text-primary me-2"></i> @L.Get("Checkout.Delivery")</h5>
+                            
+                            @if (string.IsNullOrEmpty(order.Street) && !string.IsNullOrEmpty(order.ShippingAddress))
+                            {
+                                <p class="mb-0">@order.ShippingAddress</p>
+                            }
+                            else if (!string.IsNullOrEmpty(order.Street))
+                            {
+                                <address class="mb-0 text-muted">
+                                    <strong>@order.CustomerName</strong><br>
+                                    @order.Street, @order.Number<br>
+                                    @if (!string.IsNullOrEmpty(order.Neighborhood)) { <span>@order.Neighborhood<br></span> }
+                                    @order.City - @order.State<br>
+                                    CEP: @order.ZipCode<br>
+                                    @order.Country
+                                </address>
+                            }
+                            else
+                            {
+                                @if (order.Items.All(item => item.IsDigital))
+                                {
+                                    <p class="text-muted"><i class="fa fa-download"></i> Entrega digital pela área de downloads</p>
+                                }
+                                else
+                                {
+                                    <p class="text-muted"><i class="fa fa-exclamation-circle"></i> Endereço não informado neste pedido</p>
+                                }
+                            }
+                        </div>
+                    </div>
+
+                    <!-- Rastreamento -->
+                    @if (!string.IsNullOrEmpty(order.TrackingCode) || !string.IsNullOrEmpty(order.ShippingLabelId))
+                    {
+                        <div class="card shadow-sm mb-4 border-0 tracking-card">
+                            <div class="card-body p-4">
+                                <h5 class="card-title mb-3"><i class="fa fa-map-marker text-primary me-2"></i> @L.Get("OrderDetails.Tracking")</h5>
+                                
+                                @if (!string.IsNullOrEmpty(order.TrackingCode))
+                                {
+                                    <div class="mb-3">
+                                        <small class="text-muted d-block mb-1">@L.Get("OrderDetails.TrackingCode"):</small>
+                                        <div class="input-group">
+                                            <input type="text" class="form-control bg-light" value="@order.TrackingCode" readonly id="trackingCodeInput" />
+                                            <button class="btn btn-outline-primary" type="button" @onclick="CopyTrackingCode" title="Copiar código">
+                                                <i class="fa @(trackingCopied ? "fa-check" : "fa-copy")"></i>
+                                                @(trackingCopied ? "Copiado!" : "Copiar")
+                                            </button>
+                                        </div>
+                                    </div>
+                                }
+                                else if (!string.IsNullOrEmpty(order.MelhorEnvioTracking))
+                                {
+                                    <div class="mb-3">
+                                        <small class="text-muted d-block mb-1">@L.Get("OrderDetails.MelhorEnvioCode"):</small>
+                                        <div class="input-group">
+                                            <input type="text" class="form-control bg-light" value="@order.MelhorEnvioTracking" readonly />
+                                            <button class="btn btn-outline-primary" type="button" @onclick="CopyMelhorEnvioTracking" title="Copiar código">
+                                                <i class="fa @(trackingCopied ? "fa-check" : "fa-copy")"></i>
+                                                @(trackingCopied ? "Copiado!" : "Copiar")
+                                            </button>
+                                        </div>
+                                    </div>
+                                }
+                                
+                                @if (!string.IsNullOrEmpty(order.CarrierName))
+                                {
+                                    <div class="mb-2">
+                                        <small class="text-muted">@L.Get("OrderDetails.Carrier"):</small>
+                                        <div class="fw-bold">
+                                            @order.CarrierName
+                                            @if (!string.IsNullOrEmpty(order.CarrierService))
+                                            {
+                                                <span class="badge bg-secondary ms-1">@order.CarrierService</span>
+                                            }
+                                        </div>
+                                    </div>
+                                }
+                                
+                                @if (!string.IsNullOrEmpty(order.ShippingStatus))
+                                {
+                                    <div class="mb-2">
+                                        <small class="text-muted">Status:</small>
+                                        <div>
+                                            <span class="badge @GetShippingStatusBadge(order.ShippingStatus) p-2">
+                                                <i class="fa @GetShippingStatusIcon(order.ShippingStatus) me-1"></i>
+                                                @GetShippingStatusText(order.ShippingStatus)
+                                            </span>
+                                        </div>
+                                    </div>
+                                }
+                                
+                                @if (order.EstimatedDeliveryDate.HasValue)
+                                {
+                                    <div class="mb-2">
+                                        <small class="text-muted">Previsão de Entrega:</small>
+                                        <div class="fw-bold text-success">
+                                            <i class="fa fa-calendar me-1"></i>
+                                            @L.FormatDate(order.EstimatedDeliveryDate.Value.ToLocalTime())
+                                        </div>
+                                    </div>
+                                }
+                                
+                                @if (order.ShippedAt.HasValue)
+                                {
+                                    <div class="mb-2">
+                                        <small class="text-muted">Enviado em:</small>
+                                        <div>@L.FormatDateTime(order.ShippedAt.Value.ToLocalTime())</div>
+                                    </div>
+                                }
+                                
+                                @if (order.ShippingCost.HasValue && order.ShippingCost > 0)
+                                {
+                                    <div class="mb-0">
+                                        <small class="text-muted">@L.Get("OrderDetails.ShippingCost"):</small>
+                                        <div class="fw-bold">@L.FormatCurrency(order.ShippingCost.Value)</div>
+                                    </div>
+                                }
+                                
+                                <!-- External tracking link -->
+                                @if (!string.IsNullOrEmpty(order.TrackingCode))
+                                {
+                                    <div class="mt-3 pt-3 border-top">
+                                        <a href="@GetExternalTrackingUrl(order.TrackingCode, order.CarrierName)" 
+                                           target="_blank" 
+                                           rel="noopener noreferrer" 
+                                           class="btn btn-outline-primary btn-sm w-100">
+                                            <i class="fa fa-external-link me-1"></i> @L.Get("OrderDetails.TrackExternal")
+                                        </a>
+                                    </div>
+                                }
+                            </div>
+                        </div>
+                    }
+                    else if (!string.IsNullOrEmpty(order.Street) && order.Status?.ToLower() != "delivered" && !order.Items.All(i => i.IsDigital))
+                    {
+                        <!-- No tracking yet for physical orders -->
+                        <div class="card shadow-sm mb-4 border-0">
+                            <div class="card-body p-4">
+                                <h5 class="card-title mb-3"><i class="fa fa-map-marker text-primary me-2"></i> @L.Get("OrderDetails.Tracking")</h5>
+                                <div class="text-center text-muted py-2">
+                                    <i class="fa fa-clock-o fa-2x mb-2 d-block"></i>
+                                    <p class="mb-0">@L.Get("OrderDetails.NoTracking")</p>
+                                </div>
+                            </div>
+                        </div>
+                    }
+
+                    <!-- Informações de Pagamento -->
+                    <div class="card shadow-sm mb-4 border-0">
+                        <div class="card-body p-4">
+                            <h5 class="card-title mb-3"><i class="fa fa-credit-card text-primary me-2"></i> @L.Get("OrderDetails.Payment")</h5>
+                             <p class="mb-2">
+                                <span class="text-muted">@L.Get("OrderDetails.PaymentMethod"):</span> <br>
+                                <strong>@GetPaymentMethodText(order.PaymentMethod ?? "")</strong>
+                            </p>
+                            @if (order.PaidAt.HasValue)
+                            {
+                                <p class="mb-2">
+                                    <span class="text-muted">@L.Get("OrderDetails.PaidAt"):</span> <br>
+                                    @L.FormatDateTime(order.PaidAt.Value.ToLocalTime())
+                                </p>
+                            }
+                            @if (!string.IsNullOrEmpty(order.TransactionId))
+                            {
+                                <div class="mt-3 pt-2 border-top">
+                                    <small class="text-muted d-block">@L.Get("OrderDetails.TransactionId"):</small>
+                                    <code class="text-break bg-light px-2 py-1 rounded d-block mt-1">@order.TransactionId</code>
+                                </div>
+                            }
+                        </div>
+                    </div>
+                    
+                     <!-- Contato -->
+                    <div class="card shadow-sm border-0">
+                        <div class="card-body p-4">
+                            <h5 class="card-title mb-3"><i class="fa fa-user text-primary me-2"></i> @L.Get("OrderDetails.Contact")</h5>
+                            <p class="mb-2"><i class="fa fa-envelope text-muted me-2"></i> @(order.CustomerEmail ?? "N/A")</p>
+                            <p class="mb-0"><i class="fa fa-phone text-muted me-2"></i> @(order.CustomerPhone ?? "N/A")</p>
+                        </div>
+                    </div>
+
+                </div>
+            </div>
+        }
+    </div>
+</section>
+
+<style>
+    .hover-primary:hover {
+        color: var(--bs-primary) !important;
+    }
+    .card {
+        border-radius: 0.5rem;
+    }
+    .tracking-card .input-group input {
+        font-family: monospace;
+        font-weight: bold;
+        letter-spacing: 1px;
+    }
+</style>
+
+@inject IJSRuntime JSRuntime
+
+@code {
+    [Parameter]
+    public string Id { get; set; } = string.Empty;
+
+    private Order? order;
+    private bool isLoading = true;
+    private bool trackingCopied = false;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadOrder();
+    }
+
+    private async Task LoadOrder()
+    {
+        isLoading = true;
+        try
+        {
+            order = await OrderService.GetOrderById(Id);
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine(ex.Message);
+        }
+        finally
+        {
+            isLoading = false;
+        }
+    }
+
+    private async Task CopyTrackingCode()
+    {
+        if (order != null && !string.IsNullOrEmpty(order.TrackingCode))
+        {
+            await CopyToClipboard(order.TrackingCode);
+        }
+    }
+
+    private async Task CopyMelhorEnvioTracking()
+    {
+        if (order != null && !string.IsNullOrEmpty(order.MelhorEnvioTracking))
+        {
+            await CopyToClipboard(order.MelhorEnvioTracking);
+        }
+    }
+
+    private async Task CopyToClipboard(string text)
+    {
+        try
+        {
+            await JSRuntime.InvokeVoidAsync("navigator.clipboard.writeText", text);
+            trackingCopied = true;
+            StateHasChanged();
+            
+            // Reset after 2 seconds
+            await Task.Delay(2000);
+            trackingCopied = false;
+            StateHasChanged();
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Copy failed: {ex.Message}");
+        }
+    }
+
+    private string GetStatusText(string status)
+    {
+        return status?.ToLower() switch
+        {
+            "pending" => L.Get("Order.Status.Pending"),
+            "paid" => L.Get("Order.Status.Paid"),
+            "processing" => L.Get("Order.Status.Processing"),
+            "shipped" => L.Get("Order.Status.Shipped"),
+            "delivered" => L.Get("Order.Status.Delivered"),
+            "cancelled" => L.Get("Order.Status.Cancelled"),
+            "refunded" => L.Get("Order.Status.Refunded"),
+            "awaiting_pickup" => L.Get("Order.Status.AwaitingPickup"),
+            "completed" => L.Get("Order.Status.Completed"),
+            "awaiting_payment" => L.Get("Order.Status.AwaitingPayment"),
+            "denied" => L.Get("Order.Status.Denied"),
+            "reversed" => L.Get("Order.Status.Reversed"),
+            _ => status ?? "" 
+        };
+    }
+
+    private string GetBadgeClass(string status)
+    {
+         return status?.ToLower() switch
+        {
+            "pending" => "bg-warning text-dark",
+            "paid" => "bg-success",
+            "processing" => "bg-info text-dark",
+            "shipped" => "bg-primary",
+            "delivered" => "bg-success",
+            "cancelled" => "bg-danger",
+            "refunded" => "bg-secondary",
+            _ => "bg-secondary" 
+        };
+    }
+
+    private string GetPaymentMethodText(string method)
+    {
+        return method switch
+        {
+            "CreditCard" => "Cartão de Crédito",
+            "PayPal" => "PayPal",
+            "BankTransfer" => "Transferência Bancária",
+            "Pix" => "Pix",
+            "Crypto" => "Criptomoeda",
+            "CashOnDelivery" => "Pagamento na Entrega",
+            _ => method
+        };
+    }
+
+    private string GetShippingSummary()
+    {
+        if (order?.ShippingCost.GetValueOrDefault() > 0)
+            return L.FormatCurrency(order.ShippingCost!.Value);
+
+        return order?.Items.All(item => item.IsDigital) == true ? "Digital" : "Não informado";
+    }
+
+    private string GetShippingStatusText(string status)
+    {
+        return status?.ToLower() switch
+        {
+            "pending" => "Aguardando",
+            "generated" => "Etiqueta Gerada",
+            "posted" => "Postado",
+            "in_transit" => "Em Trânsito",
+            "out_for_delivery" => "Saiu para Entrega",
+            "delivered" => "Entregue",
+            "returned" => "Devolvido",
+            "cancelled" => "Cancelado",
+            _ => status ?? "Desconhecido"
+        };
+    }
+
+    private string GetShippingStatusBadge(string status)
+    {
+        return status?.ToLower() switch
+        {
+            "pending" => "bg-secondary",
+            "generated" => "bg-info text-dark",
+            "posted" => "bg-primary",
+            "in_transit" => "bg-primary",
+            "out_for_delivery" => "bg-warning text-dark",
+            "delivered" => "bg-success",
+            "returned" => "bg-danger",
+            "cancelled" => "bg-danger",
+            _ => "bg-secondary"
+        };
+    }
+
+    private string GetShippingStatusIcon(string status)
+    {
+        return status?.ToLower() switch
+        {
+            "pending" => "fa-clock-o",
+            "generated" => "fa-tag",
+            "posted" => "fa-check",
+            "in_transit" => "fa-truck",
+            "out_for_delivery" => "fa-motorcycle",
+            "delivered" => "fa-check-circle",
+            "returned" => "fa-undo",
+            "cancelled" => "fa-times-circle",
+            _ => "fa-question-circle"
+        };
+    }
+
+    private string GetExternalTrackingUrl(string trackingCode, string? carrierName)
+    {
+        // Determine carrier and return appropriate tracking URL
+        var carrier = carrierName?.ToLower() ?? "";
+        
+        if (carrier.Contains("correios"))
+        {
+            return $"https://rastreamento.correios.com.br/app/index.php?objeto={trackingCode}";
+        }
+        else if (carrier.Contains("jadlog"))
+        {
+            return $"https://www.jadlog.com.br/sitejadlog/tracking.jad?cte={trackingCode}";
+        }
+        else if (carrier.Contains("loggi"))
+        {
+            return $"https://www.loggi.com/rastreador/?id={trackingCode}";
+        }
+        else if (carrier.Contains("azul"))
+        {
+            return $"https://www.azulcargo.com.br/rastreie-sua-encomenda/?cte={trackingCode}";
+        }
+        else if (carrier.Contains("j&t") || carrier.Contains("jt"))
+        {
+            return $"https://www.jtexpress.com.br/rastreamento?bills={trackingCode}";
+        }
+        else if (carrier.Contains("latam"))
+        {
+            return $"https://www.latamcargo.com/pt/trackshipment?docNumber={trackingCode}";
+        }
+        else
+        {
+            // Default to Google search for tracking
+            return $"https://www.google.com/search?q=rastrear+{trackingCode}";
+        }
+    }
+}
+

@@ -1,0 +1,78 @@
+@using BlazorClient.Core.Navigation
+@using BlazorClient.Core.Interfaces
+@inject ILocalizationService L
+
+<MudNavMenu Class="ynex-nav-menu pa-2">
+    <MudNavLink Href="@AppRoutes.Home" Match="NavLinkMatch.All" Icon="@Icons.Material.Filled.Dashboard" Class="rounded-lg mb-1">
+        @L.Get("Nav.Home")
+    </MudNavLink>
+    
+    <MudNavLink Href="@AppRoutes.Shop" Icon="@Icons.Material.Filled.Storefront" Class="rounded-lg mb-1">
+        @L.Get("Nav.Shop")
+    </MudNavLink>
+
+    <MudNavGroup Title="@L.Get("Nav.Categories")" Icon="@Icons.Material.Filled.Category" Expanded="false" Class="rounded-lg mb-1">
+        <MudNavLink Href="/shop?category=software" Icon="@Icons.Material.Filled.Code">Software</MudNavLink>
+        <MudNavLink Href="/shop?category=design" Icon="@Icons.Material.Filled.Brush">Design</MudNavLink>
+        <MudNavLink Href="/shop?category=marketing" Icon="@Icons.Material.Filled.Campaign">Marketing</MudNavLink>
+    </MudNavGroup>
+
+    <div class="ynex-menu-label px-4 py-2 mt-4">
+        <MudText Typo="Typo.overline" Class="ynex-text-muted fw-bold">@L.Get("Nav.Personal")</MudText>
+    </div>
+
+    <MudNavLink Href="/my-account/orders" Icon="@Icons.Material.Filled.ShoppingBag" Class="rounded-lg mb-1">
+        @L.Get("Nav.MyOrders")
+    </MudNavLink>
+    <MudNavLink Href="/my-account/profile" Icon="@Icons.Material.Filled.AccountCircle" Class="rounded-lg mb-1">
+        @L.Get("Nav.MyProfile")
+    </MudNavLink>
+
+    <AuthorizeView Roles="Admin">
+        <Authorized>
+            <div class="ynex-menu-label px-4 py-2 mt-4">
+                <MudText Typo="Typo.overline" Class="ynex-text-muted fw-bold">ADMINISTRATION (VERIFIED)</MudText>
+            </div>
+            <MudNavGroup Title="Admin" Icon="@Icons.Material.Filled.AdminPanelSettings" Expanded="false" Class="rounded-lg mb-1">
+                <MudNavLink Href="@AppRoutes.AdminDashboard" Icon="@Icons.Material.Filled.Analytics">@L.Get("Nav.AdminDashboard")</MudNavLink>
+                <MudNavLink Href="@AppRoutes.AdminProducts" Icon="@Icons.Material.Filled.Inventory">@L.Get("Nav.AdminProducts")</MudNavLink>
+                <MudNavLink Href="@AppRoutes.AdminOrders" Icon="@Icons.Material.Filled.Receipt">@L.Get("Nav.AdminOrders")</MudNavLink>
+                <MudNavLink Href="@AppRoutes.AdminUsers" Icon="@Icons.Material.Filled.People">@L.Get("Nav.AdminUsers")</MudNavLink>
+                <MudNavLink Href="@AppRoutes.AdminReviews" Icon="@Icons.Material.Filled.RateReview">@L.Get("Nav.AdminReviews")</MudNavLink>
+            </MudNavGroup>
+        </Authorized>
+        <NotAuthorized>
+             <!-- Debug info if logged in but not admin -->
+             <AuthorizeView Context="innerAuth">
+                 <Authorized>
+                     <div class="px-4 py-2">
+                         <MudText Typo="Typo.caption" Class="text-muted">User Role: Customer</MudText>
+                     </div>
+                 </Authorized>
+             </AuthorizeView>
+        </NotAuthorized>
+    </AuthorizeView>
+</MudNavMenu>
+
+<style>
+    .ynex-nav-menu .mud-nav-link {
+        padding: 10px 16px !important;
+        margin: 4px 8px !important;
+        transition: all 0.2s ease;
+    }
+    .ynex-nav-menu .mud-nav-link:hover {
+        background-color: rgba(132, 90, 223, 0.05) !important;
+        color: var(--mud-palette-primary) !important;
+    }
+    .ynex-nav-menu .mud-nav-link.active {
+        background-color: var(--mud-palette-primary) !important;
+        color: white !important;
+        box-shadow: 0 4px 12px rgba(132, 90, 223, 0.2);
+    }
+    .ynex-nav-menu .mud-nav-link .mud-nav-link-icon {
+        margin-right: 12px !important;
+    }
+    .ynex-menu-label {
+        opacity: 0.6;
+    }
+</style>

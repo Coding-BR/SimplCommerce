@@ -1,0 +1,164 @@
+@import url('https://fonts.googleapis.com/css2?family=Playfair+Display:wght@700;800;900&family=Montserrat:wght@300;400;500;600;700;800;900&display=swap');
+
+:root {
+    --mud-palette-primary: #2E5E3A;
+    --primary-dark: #1e3f27;
+    --primary-light: #eef5f0;
+}
+
+html, body {
+    font-family: 'Montserrat', sans-serif;
+    background-color: #ffffff;
+}
+
+#app {
+    overflow-x: hidden;
+}
+
+/* =========================================
+   PREMIUM COUPON SYSTEM (GREEN THEME)
+   ========================================= */
+
+.coupon-main-container {
+    background-color: #f8faf9 !important; /* Extremely light green for contrast */
+    border-radius: 32px;
+    border: 1px solid #e9efeb;
+    padding: 3rem !important;
+}
+
+.coupon-hero-title {
+    font-family: 'Montserrat', sans-serif;
+    font-size: clamp(2.2rem, 5vw, 3.5rem);
+    font-weight: 900;
+    line-height: 1.1;
+    color: #1a1a1a !important;
+    text-transform: none;
+}
+
+.coupon-hero-subtitle {
+    font-size: 1.1rem;
+    color: #4b5563;
+    max-width: 600px;
+    margin: 0 auto;
+}
+
+/* The Ticket Card */
+.coupon-card-premium {
+    position: relative;
+    background: #ffffff !important;
+    border-radius: 24px;
+    display: flex !important;
+    flex-direction: column !important;
+    overflow: hidden !important;
+    height: 100%;
+    border: 1px solid #e2e8f0 !important;
+    box-shadow: 0 10px 30px rgba(46, 94, 58, 0.08) !important;
+    transition: all 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+}
+
+.coupon-card-premium:hover {
+    transform: translateY(-12px);
+    box-shadow: 0 25px 50px rgba(46, 94, 58, 0.15) !important;
+    border-color: #2E5E3A !important;
+}
+
+/* Header - Green Gradient */
+.coupon-card-header-vibrant {
+    background: #2E5E3A !important;
+    background: linear-gradient(135deg, #2E5E3A 0%, #1a3621 100%) !important;
+    padding: 3.5rem 1.5rem !important;
+    color: #ffffff !important;
+    text-align: center;
+    position: relative;
+}
+
+.coupon-value-large {
+    font-family: 'Montserrat', sans-serif;
+    font-size: 4rem;
+    font-weight: 900;
+    line-height: 1;
+    margin-bottom: 0.5rem;
+    color: #ffffff !important;
+    display: block;
+}
+
+.coupon-off-label {
+    font-weight: 800;
+    letter-spacing: 5px;
+    font-size: 0.85rem;
+    color: #ffffff !important;
+    background: rgba(255,255,255,0.2) !important;
+    padding: 4px 16px !important;
+    border-radius: 40px;
+    display: inline-block;
+    border: 1px solid rgba(255,255,255,0.3) !important;
+    text-transform: uppercase;
+}
+
+/* The Coupon Code Box */
+.coupon-code-badge {
+    background: #ffffff !important;
+    color: #1a3621 !important; /* Very dark green text */
+    border: 2px dashed #2E5E3A !important;
+    padding: 0.8rem 2rem !important;
+    border-radius: 10px;
+    font-family: 'Montserrat', sans-serif;
+    font-weight: 900;
+    font-size: 1.4rem;
+    letter-spacing: 4px;
+    margin-top: 1.5rem;
+    display: inline-block;
+    box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+}
+
+/* Body Info */
+.coupon-card-body-refined {
+    padding: 2.5rem !important;
+    background: #ffffff !important;
+    flex-grow: 1;
+    display: flex !important;
+    flex-direction: column !important;
+}
+
+.coupon-info-group {
+    display: flex;
+    flex-direction: column;
+    gap: 1.25rem;
+}
+
+.coupon-info-item {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+}
+
+.coupon-info-label {
+    text-transform: uppercase;
+    font-weight: 700;
+    font-size: 0.7rem;
+    color: #94a3b8;
+    letter-spacing: 1px;
+    display: block;
+}
+
+.coupon-info-value {
+    font-weight: 700;
+    color: #1e293b !important;
+    font-size: 1rem;
+}
+
+.coupon-dotted-separator {
+    border-top: 2px dashed #f1f5f9;
+    margin: 2rem 0 !important;
+    width: 100%;
+}
+
+.coupon-copy-btn {
+    background-color: #2E5E3A !important;
+    color: #ffffff !important;
+    font-weight: 900 !important;
+    letter-spacing: 1px !important;
+    border-radius: 12px !important;
+    padding: 1rem !important;
+    text-transform: uppercase;
+}

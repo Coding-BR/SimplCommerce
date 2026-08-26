@@ -1,0 +1,551 @@
+@using BlazorClient.Core.Interfaces
+@page "/admin/settings"
+@layout AdminLayout
+@using BlazorClient.Components
+@using BlazorClient.Core.Services
+@using BlazorClient.Models
+@inject ISettingsService SettingsService
+@inject HttpClient HttpClient
+@inject IJSRuntime JSRuntime
+@inject ILocalizationService L
+@attribute [Authorize(Roles = "Admin")]
+
+<PageTitle>@L.Get("Admin.Settings.Title") - Admin</PageTitle>
+
+<div class="admin-page-header ic-admin-page-heading">
+    <span class="ic-admin-kicker">PREFERÊNCIAS</span>
+    <h1>@L.Get("Admin.Settings.Title")</h1>
+    <p>Identidade, contatos e informações públicas exibidas na loja.</p>
+</div>
+
+@if (errorMessage != null)
+{
+    <div class="alert alert-danger alert-dismissible fade show" role="alert">
+        <strong>@L.Get("Admin.Settings.ErrorTitle")</strong> @errorMessage
+        <button type="button" class="close" @onclick="() => errorMessage = null">
+            <span aria-hidden="true">&times;</span>
+        </button>
+    </div>
+}
+
+@if (successMessage != null)
+{
+    <div class="alert alert-success alert-dismissible fade show" role="alert">
+        <strong>@L.Get("Admin.Settings.SuccessTitle")</strong> @successMessage
+        <button type="button" class="close" @onclick="() => successMessage = null">
+            <span aria-hidden="true">&times;</span>
+        </button>
+    </div>
+}
+
+@if (isLoading)
+{
+    <div class="text-center py-5">
+        <div class="spinner-border text-primary" role="status"></div>
+    </div>
+}
+else
+{
+    <EditForm Model="@settings" OnValidSubmit="SaveSettings" OnInvalidSubmit="HandleInvalidSubmit">
+        <DataAnnotationsValidator />
+        <ValidationSummary />
+        
+        <div class="row">
+            <!-- General Contact Info -->
+            <div class="col-md-12 mb-4">
+                <div class="card shadow-sm">
+                    <div class="card-header bg-white">
+                        <h5 class="mb-0">@L.Get("Admin.Settings.StoreInfo")</h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="form-group">
+                            <label>@L.Get("Admin.Settings.TopBarMessageLabel")</label>
+                            <InputText class="form-control" @bind-Value="settings.TopBarMessage" placeholder="@L.Get("Admin.Settings.TopBarPlaceholder")" />
+                        </div>
+                        <div class="row">
+                            <div class="col-md-4">
+                                <div class="form-group">
+                                    <label>@L.Get("Admin.Settings.Address")</label>
+                                    <InputText class="form-control" @bind-Value="settings.Contact.Address" />
+                                </div>
+                            </div>
+                            <div class="col-md-4">
+                                <div class="form-group">
+                                    <label>@L.Get("Admin.Settings.PhoneHotlineLabel")</label>
+                                    <InputText class="form-control" @bind-Value="settings.Contact.Hotline" />
+                                </div>
+                            </div>
+                            <div class="col-md-4">
+                                <div class="form-group">
+                                    <label>@L.Get("Admin.Settings.EmailLabel")</label>
+                                    <InputText class="form-control" @bind-Value="settings.Contact.Email" />
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Logo Personalizada -->
+            <div class="col-md-12 mb-4">
+                <div class="card shadow-sm">
+                    <div class="card-header bg-white">
+                        <h5 class="mb-0">@L.Get("Admin.Settings.CustomLogoTitle")</h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="row">
+                            <div class="col-md-6">
+                                <div class="form-group">
+                                    <label>@L.Get("Admin.Settings.LogoPreviewLabel")</label>
+                                    <div class="border rounded p-3 text-center bg-light" style="min-height: 150px; display: flex; align-items: center; justify-content: center;">
+                                        @if (!string.IsNullOrEmpty(settings.LogoUrl))
+                                        {
+                                            <img src="@settings.LogoUrl" alt="Logo" style="max-height: 120px; max-width: 100%;" />
+                                        }
+                                        else
+                                        {
+                                            <div class="text-muted">
+                                                <i class="ion-image" style="font-size: 48px;"></i>
+                                                <p class="mt-2 mb-0">@L.Get("Admin.Settings.NoCustomLogo")</p>
+                                            </div>
+                                        }
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="form-group">
+                                    <label>@L.Get("Admin.Settings.ManageLogoLabel")</label>
+                                    <div class="d-flex flex-column gap-2">
+                                        <div>
+                                            <InputFile OnChange="HandleLogoUpload" class="form-control" accept="image/*" disabled="@isUploadingLogo" />
+                                            @if (isUploadingLogo)
+                                            {
+                                                <div class="d-flex align-items-center mt-2">
+                                                    <div class="spinner-border spinner-border-sm text-primary" role="status"></div>
+                                                </div>
+                                            }
+                                            @if (!string.IsNullOrEmpty(logoUploadError))
+                                            {
+                                                <small class="text-danger mt-2 d-block">@logoUploadError</small>
+                                            }
+                                        </div>
+                                        @if (!string.IsNullOrEmpty(settings.LogoUrl))
+                                        {
+                                            <button type="button" class="btn btn-danger btn-sm" @onclick="DeleteLogo" disabled="@isDeletingLogo">
+                                                <i class="ion-trash-a"></i> @L.Get("Admin.Settings.DeleteLogo")
+                                            </button>
+                                        }
+                                        <small class="text-muted">
+                                            @L.Get("Admin.Settings.AcceptedFormats")
+                                        </small>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Social Links -->
+            <div class="col-md-12 mb-4">
+                <div class="card shadow-sm">
+                    <div class="card-header bg-white d-flex justify-content-between align-items-center">
+                        <h5 class="mb-0">@L.Get("Admin.Settings.SocialLinks")</h5>
+                        <button type="button" class="btn btn-sm btn-outline-primary" @onclick="AddSocialLink">
+                            <i class="ion-plus"></i> @L.Get("Admin.Settings.AddNetwork")
+                        </button>
+                    </div>
+                    <div class="card-body">
+                        <div class="table-responsive">
+                            <table class="table table-hover ic-admin-mobile-table">
+                                <thead>
+                                    <tr>
+                                        <th>@L.Get("Admin.Settings.NetworkHeader")</th>
+                                        <th style="width: 250px;">@L.Get("Admin.Settings.Icon")</th>
+                                        <th>@L.Get("Admin.Settings.UrlHeader")</th>
+                                        <th>@L.Get("Admin.Settings.ActiveHeader")</th>
+                                        <th>@L.Get("Admin.Common.Actions")</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    @foreach (var link in settings.SocialLinks)
+                                    {
+                                        <tr>
+                                            <td data-label="Rede"><InputText class="form-control form-control-sm" @bind-Value="link.Network" /></td>
+                                            <td data-label="Ícone">
+                                                <IconPicker @bind-Value="link.IconClass" />
+                                            </td>
+                                            <td data-label="URL"><InputText class="form-control form-control-sm" @bind-Value="link.Url" /></td>
+                                            <td data-label="Ativo" class="text-center">
+                                                <div class="custom-control custom-switch">
+                                                    <InputCheckbox class="custom-control-input" id="@($"switch-{link.GetHashCode()}")" @bind-Value="link.IsEnabled" />
+                                                    <label class="custom-control-label" for="@($"switch-{link.GetHashCode()}")"></label>
+                                                </div>
+                                            </td>
+                                            <td data-label="Ações">
+                                                <button type="button" class="btn btn-sm btn-danger" @onclick="() => RemoveSocialLink(link)">
+                                                    <i class="ion-trash-a"></i>
+                                                </button>
+                                            </td>
+                                        </tr>
+                                    }
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Features (Shipping Area) -->
+            <div class="col-md-12 mb-4">
+                <div class="card shadow-sm">
+                    <div class="card-header bg-white d-flex justify-content-between align-items-center">
+                        <h5 class="mb-0">@L.Get("Admin.Settings.FeaturesSection")</h5>
+                        <button type="button" class="btn btn-sm btn-outline-primary" @onclick="AddFeature">
+                            <i class="ion-plus"></i> @L.Get("Admin.Settings.AddNetwork")
+                        </button>
+                    </div>
+                    <div class="card-body">
+                         <div class="table-responsive">
+                            <table class="table table-hover ic-admin-mobile-table">
+                                <thead>
+                                    <tr>
+                                        <th style="width: 250px;">@L.Get("Admin.Settings.Icon")</th>
+                                        <th>@L.Get("Admin.Settings.Title")</th>
+                                        <th>@L.Get("Admin.Settings.Subtitle")</th>
+                                        <th>@L.Get("Admin.Settings.ActiveHeader")</th>
+                                        <th>@L.Get("Admin.Common.Actions")</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    @foreach (var feature in settings.Features)
+                                    {
+                                        <tr>
+                                            <td data-label="Ícone">
+                                                <IconPicker @bind-Value="feature.IconClass" />
+                                            </td>
+                                            <td data-label="Título"><InputText class="form-control form-control-sm" @bind-Value="feature.Title" /></td>
+                                            <td data-label="Subtítulo"><InputText class="form-control form-control-sm" @bind-Value="feature.Subtitle" /></td>
+                                            <td data-label="Ativo" class="text-center">
+                                                <div class="custom-control custom-switch">
+                                                    <InputCheckbox class="custom-control-input" id="@($"feat-switch-{feature.GetHashCode()}")" @bind-Value="feature.IsEnabled" />
+                                                    <label class="custom-control-label" for="@($"feat-switch-{feature.GetHashCode()}")"></label>
+                                                </div>
+                                            </td>
+                                            <td data-label="Ações">
+                                                <button type="button" class="btn btn-sm btn-danger" @onclick="() => RemoveFeature(feature)">
+                                                    <i class="ion-trash-a"></i>
+                                                </button>
+                                            </td>
+                                        </tr>
+                                    }
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+        </div>
+
+        <div class="ic-public-settings-actions bg-white p-3 border shadow-sm rounded">
+             <div class="container-fluid d-flex justify-content-end align-items-center gap-3">
+                 @if (isSaving)
+                 {
+                     <div class="spinner-border text-primary spinner-border-sm" role="status"></div>
+                     <span class="text-muted">@L.Get("Admin.Common.Saving")...</span>
+                 }
+                 @if (!string.IsNullOrEmpty(inlineSuccessMessage))
+                 {
+                     <div class="alert alert-success mb-0 py-2 px-3 d-flex align-items-center" role="alert">
+                         <i class="ion-checkmark-circled mr-2" style="font-size: 20px;"></i>
+                         <strong>@inlineSuccessMessage</strong>
+                     </div>
+                 }
+                 @if (!string.IsNullOrEmpty(inlineErrorMessage))
+                 {
+                     <div class="alert alert-danger mb-0 py-2 px-3 d-flex align-items-center" role="alert">
+                         <i class="ion-close-circled mr-2" style="font-size: 20px;"></i>
+                         <strong>@inlineErrorMessage</strong>
+                     </div>
+                 }
+                 <button type="submit" class="btn btn-primary btn-lg px-5" disabled="@isSaving">
+                     <i class="ion-android-checkmark-circle"></i> @L.Get("Admin.Settings.SaveSettings")
+                 </button>
+             </div>
+        </div>
+    </EditForm>
+
+    <section class="ic-integrations" aria-labelledby="integrations-title">
+        <div class="ic-integrations-heading">
+            <div>
+                <span class="ic-admin-kicker">CONEXÕES SEGURAS</span>
+                <h2 id="integrations-title">Integrações e credenciais</h2>
+                <p>Configure pagamentos, frete, e-mail e armazenamento. Credenciais salvas nunca voltam a aparecer nesta tela.</p>
+            </div>
+            <div class="ic-secure-note"><i class="ion-locked"></i><span>Segredos criptografados<br /><small>Campos vazios preservam o valor atual</small></span></div>
+        </div>
+
+        @if (integrationError != null)
+        {
+            <div class="alert alert-danger">@integrationError</div>
+        }
+        @if (integrationSuccess != null)
+        {
+            <div class="alert alert-success">@integrationSuccess</div>
+        }
+
+        <div class="ic-integration-grid">
+            <article class="ic-integration-card">
+                <header><div class="ic-provider-icon paypal">P</div><div><h3>PayPal</h3><p>Checkout e confirmação de pagamentos</p></div><span class="ic-status @(integrations.PayPal.SecretConfigured ? "ready" : "pending")">@(integrations.PayPal.SecretConfigured ? "Configurado" : "Pendente")</span></header>
+                <div class="ic-switch-row"><label><input type="checkbox" @bind="integrations.PayPal.Enabled" /> Ativar PayPal</label><label><input type="checkbox" @bind="integrations.PayPal.Sandbox" /> Ambiente sandbox</label></div>
+                <label class="ic-field"><span>Client ID</span><input class="form-control" autocomplete="off" @bind="integrations.PayPal.ClientId" @bind:event="oninput" /></label>
+                <label class="ic-field"><span>Client Secret</span><input class="form-control" type="password" autocomplete="new-password" placeholder="@SecretPlaceholder(integrations.PayPal.SecretConfigured)" @bind="integrations.PayPal.Secret" @bind:event="oninput" /></label>
+                <label class="ic-field"><span>Segredo do webhook</span><input class="form-control" type="password" autocomplete="new-password" placeholder="@SecretPlaceholder(integrations.PayPal.WebhookSecretConfigured)" @bind="integrations.PayPal.WebhookSecret" @bind:event="oninput" /></label>
+                <div class="ic-clear-row"><label><input type="checkbox" @bind="integrations.PayPal.ClearSecret" /> Remover secret atual</label><label><input type="checkbox" @bind="integrations.PayPal.ClearWebhookSecret" /> Remover webhook</label></div>
+            </article>
+
+            <article class="ic-integration-card">
+                <header><div class="ic-provider-icon mercado">M</div><div><h3>Mercado Pago</h3><p>Preferências de checkout e webhooks</p></div><span class="ic-status @(integrations.MercadoPago.AccessTokenConfigured ? "ready" : "pending")">@(integrations.MercadoPago.AccessTokenConfigured ? "Configurado" : "Pendente")</span></header>
+                <div class="ic-switch-row"><label><input type="checkbox" @bind="integrations.MercadoPago.Enabled" /> Ativar Mercado Pago</label><label><input type="checkbox" @bind="integrations.MercadoPago.Sandbox" /> Credencial de teste</label></div>
+                <label class="ic-field"><span>Access token</span><input class="form-control" type="password" autocomplete="new-password" placeholder="@SecretPlaceholder(integrations.MercadoPago.AccessTokenConfigured)" @bind="integrations.MercadoPago.AccessToken" @bind:event="oninput" /></label>
+                <label class="ic-field"><span>Segredo do webhook</span><input class="form-control" type="password" autocomplete="new-password" placeholder="@SecretPlaceholder(integrations.MercadoPago.WebhookSecretConfigured)" @bind="integrations.MercadoPago.WebhookSecret" @bind:event="oninput" /></label>
+                <div class="ic-clear-row"><label><input type="checkbox" @bind="integrations.MercadoPago.ClearAccessToken" /> Remover token atual</label><label><input type="checkbox" @bind="integrations.MercadoPago.ClearWebhookSecret" /> Remover webhook</label></div>
+            </article>
+
+            <article class="ic-integration-card">
+                <header><div class="ic-provider-icon shipping"><i class="ion-android-bicycle"></i></div><div><h3>Frete</h3><p>Tabela local ou credenciais de transportadora</p></div><span class="ic-status ready">@(integrations.Shipping.Enabled ? "Ativo" : "Inativo")</span></header>
+                <div class="ic-switch-row"><label><input type="checkbox" @bind="integrations.Shipping.Enabled" /> Ativar entrega com frete</label><label><input type="checkbox" @bind="integrations.Shipping.LocalPickupEnabled" /> Permitir retirada local gratuita</label></div>
+                @if (integrations.Shipping.LocalPickupEnabled)
+                {
+                    <div class="ic-pickup-box">
+                        <strong><i class="ion-bag"></i> Retirada local</strong>
+                        <label class="ic-field"><span>Endereço de retirada</span><input class="form-control" placeholder="Rua, número, bairro e cidade" @bind="integrations.Shipping.PickupAddress" @bind:event="oninput" /></label>
+                        <div class="ic-two-columns wide-first"><label class="ic-field"><span>Orientações ao cliente</span><input class="form-control" placeholder="Aguarde a confirmação antes de buscar" @bind="integrations.Shipping.PickupInstructions" @bind:event="oninput" /></label><label class="ic-field"><span>Preparo (dias)</span><input class="form-control" type="number" min="0" max="60" @bind="integrations.Shipping.PickupPreparationDays" /></label></div>
+                    </div>
+                }
+                @if (!integrations.Shipping.Enabled)
+                {
+                    <p class="ic-inline-info"><i class="ion-information-circled"></i> Com a entrega desativada, a retirada local será a única opção para produtos físicos.</p>
+                }
+                <div class="ic-two-columns"><label class="ic-field"><span>Provedor</span><select class="form-control" @bind="integrations.Shipping.Provider"><option value="Local">Tabela local</option><option value="MelhorEnvio">Melhor Envio</option></select></label><label class="ic-field"><span>CEP de origem</span><input class="form-control" inputmode="numeric" @bind="integrations.Shipping.OriginZipCode" @bind:event="oninput" /></label></div>
+                <label class="ic-field"><span>Token da API (opcional)</span><input class="form-control" type="password" autocomplete="new-password" placeholder="@SecretPlaceholder(integrations.Shipping.ApiTokenConfigured)" @bind="integrations.Shipping.ApiToken" @bind:event="oninput" /></label>
+                <div class="ic-four-columns"><label class="ic-field"><span>Base (R$)</span><input class="form-control" type="number" min="0" step="0.01" @bind="integrations.Shipping.BasePrice" /></label><label class="ic-field"><span>Por kg (R$)</span><input class="form-control" type="number" min="0" step="0.01" @bind="integrations.Shipping.PricePerKg" /></label><label class="ic-field"><span>Limite extra</span><input class="form-control" type="number" min="0" step="0.01" @bind="integrations.Shipping.MaxAdditionalPrice" /></label><label class="ic-field"><span>Adic. expresso</span><input class="form-control" type="number" min="0" step="0.01" @bind="integrations.Shipping.ExpressAdditionalPrice" /></label></div>
+                <div class="ic-two-columns"><label class="ic-field"><span>Prazo econômico</span><input class="form-control" type="number" min="1" max="60" @bind="integrations.Shipping.EconomyDeliveryDays" /></label><label class="ic-field"><span>Prazo expresso</span><input class="form-control" type="number" min="1" max="60" @bind="integrations.Shipping.ExpressDeliveryDays" /></label></div>
+            </article>
+
+            <article class="ic-integration-card">
+                <header><div class="ic-provider-icon smtp"><i class="ion-email"></i></div><div><h3>E-mail SMTP</h3><p>Recuperação de senha e notificações</p></div><span class="ic-status @(!string.IsNullOrWhiteSpace(integrations.Smtp.Host) ? "ready" : "pending")">@(!string.IsNullOrWhiteSpace(integrations.Smtp.Host) ? "Configurado" : "Pendente")</span></header>
+                <div class="ic-switch-row"><label><input type="checkbox" @bind="integrations.Smtp.Enabled" /> Ativar envio</label><label><input type="checkbox" @bind="integrations.Smtp.UseSsl" /> TLS/SSL</label></div>
+                <div class="ic-two-columns wide-first"><label class="ic-field"><span>Servidor SMTP</span><input class="form-control" autocomplete="off" @bind="integrations.Smtp.Host" @bind:event="oninput" /></label><label class="ic-field"><span>Porta</span><input class="form-control" type="number" min="1" max="65535" @bind="integrations.Smtp.Port" /></label></div>
+                <div class="ic-two-columns"><label class="ic-field"><span>Usuário</span><input class="form-control" autocomplete="off" @bind="integrations.Smtp.Username" @bind:event="oninput" /></label><label class="ic-field"><span>Senha</span><input class="form-control" type="password" autocomplete="new-password" placeholder="@SecretPlaceholder(integrations.Smtp.PasswordConfigured)" @bind="integrations.Smtp.Password" @bind:event="oninput" /></label></div>
+                <div class="ic-two-columns"><label class="ic-field"><span>E-mail remetente</span><input class="form-control" type="email" @bind="integrations.Smtp.FromEmail" @bind:event="oninput" /></label><label class="ic-field"><span>Nome remetente</span><input class="form-control" @bind="integrations.Smtp.FromName" @bind:event="oninput" /></label></div>
+                <div class="ic-clear-row"><label><input type="checkbox" @bind="integrations.Smtp.ClearPassword" /> Remover senha SMTP atual</label></div>
+            </article>
+
+            <article class="ic-integration-card ic-card-wide">
+                <header><div class="ic-provider-icon storage"><i class="ion-cloud"></i></div><div><h3>Cloudflare R2 / MinIO</h3><p>Imagens dos produtos e arquivos digitais</p></div><span class="ic-status @(integrations.Storage.SecretKeyConfigured ? "ready" : "pending")">@(integrations.Storage.SecretKeyConfigured ? "Configurado" : "Pendente")</span></header>
+                <div class="ic-two-columns"><label class="ic-field"><span>Endpoint S3</span><input class="form-control" autocomplete="off" @bind="integrations.Storage.Endpoint" @bind:event="oninput" /></label><label class="ic-field"><span>Bucket</span><input class="form-control" autocomplete="off" @bind="integrations.Storage.Bucket" @bind:event="oninput" /></label></div>
+                <label class="ic-field"><span>URL pública</span><input class="form-control" type="url" autocomplete="off" @bind="integrations.Storage.PublicBaseUrl" @bind:event="oninput" /></label>
+                <div class="ic-two-columns"><label class="ic-field"><span>Access key</span><input class="form-control" type="password" autocomplete="new-password" placeholder="@SecretPlaceholder(integrations.Storage.AccessKeyConfigured)" @bind="integrations.Storage.AccessKey" @bind:event="oninput" /></label><label class="ic-field"><span>Secret key</span><input class="form-control" type="password" autocomplete="new-password" placeholder="@SecretPlaceholder(integrations.Storage.SecretKeyConfigured)" @bind="integrations.Storage.SecretKey" @bind:event="oninput" /></label></div>
+                <div class="ic-switch-row"><label><input type="checkbox" @bind="integrations.Storage.UseSsl" /> Usar HTTPS/TLS</label></div>
+                <div class="ic-clear-row"><label><input type="checkbox" @bind="integrations.Storage.ClearAccessKey" /> Remover access key</label><label><input type="checkbox" @bind="integrations.Storage.ClearSecretKey" /> Remover secret key</label></div>
+            </article>
+        </div>
+
+        <div class="ic-integration-actions">
+            <div><strong>Salvamento protegido</strong><span>Os valores secretos são enviados uma vez e depois permanecem mascarados.</span></div>
+            <button type="button" class="btn btn-primary btn-lg" @onclick="SaveIntegrations" disabled="@isSavingIntegrations"><i class="ion-locked"></i> @(isSavingIntegrations ? "Salvando..." : "Salvar integrações")</button>
+        </div>
+    </section>
+}
+
+@code {
+    private SiteSettings settings = new();
+    private bool isLoading = true;
+    private bool isSaving = false;
+    private string? errorMessage;
+    private string? successMessage;
+    private string? inlineSuccessMessage;
+    private string? inlineErrorMessage;
+    private IntegrationSettingsModel integrations = new();
+    private bool isSavingIntegrations;
+    private string? integrationError;
+    private string? integrationSuccess;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadSettings();
+        await LoadIntegrations();
+    }
+
+    private async Task LoadIntegrations()
+    {
+        try { integrations = await SettingsService.GetIntegrationSettingsAsync(); }
+        catch (Exception ex) { integrationError = $"Não foi possível carregar as integrações: {ex.Message}"; }
+    }
+
+    private async Task SaveIntegrations()
+    {
+        isSavingIntegrations = true;
+        integrationError = null;
+        integrationSuccess = null;
+        try
+        {
+            integrations = await SettingsService.UpdateIntegrationSettingsAsync(integrations);
+            integrationSuccess = "Integrações salvas. Os segredos permanecem protegidos e não são exibidos novamente.";
+        }
+        catch (Exception ex) { integrationError = ex.Message; }
+        finally { isSavingIntegrations = false; }
+    }
+
+    private static string SecretPlaceholder(bool configured) => configured ? "Configurado — deixe vazio para manter" : "Não configurado";
+
+    private async Task LoadSettings()
+    {
+        isLoading = true;
+        errorMessage = null;
+        try
+        {
+            settings = await SettingsService.GetSettings();
+            
+            // Initialize collections if null to avoid errors
+            if (settings.Contact == null) settings.Contact = new ContactInfo();
+            if (settings.SocialLinks == null) settings.SocialLinks = new List<SocialLink>();
+            if (settings.Features == null) settings.Features = new List<FeatureItem>();
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error loading settings: {ex.Message}");
+            errorMessage = L.Get("Admin.Common.ErrorLoadingSettings");
+        }
+        finally
+        {
+            isLoading = false;
+        }
+    }
+
+    private async Task SaveSettings()
+    {
+        isSaving = true;
+        errorMessage = null;
+        successMessage = null;
+        
+        try
+        {
+            await SettingsService.UpdateSettings(settings);
+            successMessage = L.Get("Admin.Common.SettingsSavedSuccess");
+            inlineSuccessMessage = L.Get("Admin.Common.SettingsSavedSuccess");
+            inlineErrorMessage = null;
+            
+            // Auto-hide success message after 5 seconds
+            _ = Task.Run(async () => {
+                await Task.Delay(5000);
+                inlineSuccessMessage = null;
+                await InvokeAsync(StateHasChanged);
+            });
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error saving settings: {ex.Message}");
+            errorMessage = String.Format(L.Get("Admin.Settings.SaveError"), ex.Message);
+            inlineErrorMessage = String.Format(L.Get("Admin.Settings.SaveError"), ex.Message);
+            inlineSuccessMessage = null;
+        }
+        finally
+        {
+            isSaving = false;
+        }
+    }
+
+    private void HandleInvalidSubmit()
+    {
+        errorMessage = L.Get("Admin.Common.CorrectFormErrors");
+    }
+
+    private void AddSocialLink()
+    {
+        settings.SocialLinks.Add(new SocialLink { Network = L.Get("Admin.Settings.NewNetworkName"), IconClass = "icon-social-facebook icons" });
+        StateHasChanged();
+    }
+
+    private void RemoveSocialLink(SocialLink link)
+    {
+        settings.SocialLinks.Remove(link);
+    }
+
+    private void AddFeature()
+    {
+        settings.Features.Add(new FeatureItem { Title = L.Get("Admin.Settings.NewFeatureTitle"), Subtitle = L.Get("Admin.Common.Description"), IconClass = "icon-star" });
+        StateHasChanged();
+    }
+
+    private void RemoveFeature(FeatureItem feature)
+    {
+        settings.Features.Remove(feature);
+    }
+
+    // Logo Management
+    private bool isUploadingLogo = false;
+    private bool isDeletingLogo = false;
+    private string? logoUploadError = null;
+
+    private async Task HandleLogoUpload(InputFileChangeEventArgs e)
+    {
+        isUploadingLogo = true;
+        logoUploadError = null;
+        
+        try
+        {
+            var file = e.File;
+            
+            // Validate file size (5MB)
+            if (file.Size > 5 * 1024 * 1024)
+            {
+                logoUploadError = L.Get("Admin.Settings.ImageUploadErrorSize");
+                return;
+            }
+
+            // Validate file type
+            var allowedTypes = new[] { "image/jpeg", "image/png", "image/svg+xml", "image/webp" };
+            if (!allowedTypes.Contains(file.ContentType.ToLower()))
+            {
+                logoUploadError = L.Get("Admin.Settings.ImageUploadErrorType");
+                return;
+            }
+
+            // Upload using SettingsService
+            var logoUrl = await SettingsService.UploadLogoAsync(file);
+            
+            // Update local state immediately for instant feedback
+            settings.LogoUrl = logoUrl;
+            
+            // Force UI refresh
+            StateHasChanged();
+            
+            successMessage = L.Get("Admin.Common.LogoUploadedSuccess");
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error uploading logo: {ex.Message}");
+            logoUploadError = ex.Message.Contains("Upload failed") 
+                ? ex.Message.Replace("Upload failed:", "").Trim() 
+                : L.Get("Admin.Common.ErrorUploadingLogo");
+        }
+        finally
+        {
+            isUploadingLogo = false;
+        }
+    }
+
+    private void DeleteLogo()
+    {
+        // No confirmation needed as this is just a local change until saved
+        settings.LogoUrl = null;
+        successMessage = L.Get("Admin.Common.LogoRemovedConfirm");
+        errorMessage = null;
+        StateHasChanged();
+        isDeletingLogo = false;
+    }
+}
+

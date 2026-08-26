@@ -1,0 +1,587 @@
+@import url('https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700;800;900&display=swap');
+
+:root {
+    --primary-green: #2E5E3A;
+    --primary-light: #f8faf9;
+    --border-dashed: #cbd5e1;
+    --text-dark: #1e293b;
+}
+
+html, body {
+    font-family: 'Montserrat', sans-serif;
+    background-color: #ffffff;
+}
+
+#app {
+    overflow-x: hidden;
+}
+
+/* Fix for header gap on mobile */
+.offcanvas_menu {
+    margin: 0 !important;
+    padding: 0 !important;
+}
+
+.offcanvas_menu > .container,
+.offcanvas_menu > .row,
+.offcanvas_menu > .col-12 {
+    margin-top: 0 !important;
+    margin-bottom: 0 !important;
+    padding-top: 0 !important;
+    padding-bottom: 0 !important;
+}
+
+@media (max-width: 991px) {
+    .header_section {
+        margin-top: 0 !important;
+        /* Fixed position removed as requested - header will scroll with content */
+    }
+}
+
+
+
+
+/* =========================================
+   CLEAR & DASHED REDESIGN (MODELO 1)
+   ========================================= */
+
+.coupon-main-container {
+    background-color: #ffffff !important;
+    padding: 3rem 1rem !important;
+}
+
+.coupon-hero-title {
+    font-weight: 850;
+    font-size: clamp(2rem, 5vw, 3rem);
+    color: var(--text-dark);
+    text-align: center;
+    margin-bottom: 0.5rem;
+}
+
+.coupon-hero-subtitle {
+    color: #64748b;
+    text-align: center;
+    font-size: 1.1rem;
+    margin-bottom: 4rem;
+}
+
+/* Base Card - CLEAR with DASHED border AROUND */
+.coupon-classic {
+    display: flex;
+    width: 100%;
+    background: #ffffff;
+    border-radius: 12px;
+    overflow: hidden;
+    /* border: 2px dashed #e2e8f0; REMOVED per user request */
+    transition: all 0.3s ease;
+    position: relative;
+    box-shadow: 0 4px 10px rgba(0,0,0,0.02);
+}
+
+.coupon-classic:hover {
+    transform: translateY(-5px);
+    /* border-color: var(--primary-green); REMOVED */
+    box-shadow: 0 15px 30px rgba(46, 94, 58, 0.08);
+}
+
+/* Left Section - Solid & Minimalist */
+/* Left Section - Flat Solid */
+.classic-left {
+    background-color: var(--primary-green);
+    /* Gradient and Texture removed per user request for Flat Design */
+    color: white;
+    width: 35%;
+    padding: 1.5rem;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    position: relative;
+    border-right: none; /* Ensure no border here */
+}
+
+/* Internal dashed separator */
+.classic-left::after {
+    content: '';
+    position: absolute;
+    right: 0;
+    top: 0;
+    bottom: 0;
+    border-right: 2px dashed rgba(255, 255, 255, 0.3);
+}
+
+/* Ticket Notches */
+.classic-left::before, .classic-left-notch-bottom {
+    content: '';
+    position: absolute;
+    right: -11px;
+    width: 22px;
+    height: 22px;
+    background-color: #ffffff;
+    border: 2px dashed #e2e8f0;
+    border-radius: 50%;
+    z-index: 10;
+}
+.classic-left::before { top: -11px; border-top-color: transparent; }
+.classic-left-notch-bottom { bottom: -11px; border-bottom-color: transparent; }
+
+.percent-box {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    line-height: 1;
+}
+
+.percent-val { 
+    font-size: 2.8rem; 
+    font-weight: 900; 
+    letter-spacing: -1px; 
+}
+
+.percent-label { 
+    font-size: 0.9rem; 
+    font-weight: 700; 
+    opacity: 0.9; 
+    margin-top: 5px;
+    letter-spacing: 2px;
+}
+
+/* Right Section - Clear Info */
+.classic-right {
+    padding: 1.5rem 2rem;
+    width: 65%;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    background: #fff;
+}
+
+.classic-meta {
+    font-size: 0.75rem;
+    color: #94a3b8;
+    text-transform: uppercase;
+    letter-spacing: 1.5px;
+    font-weight: 700;
+    margin-bottom: 0.5rem;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.classic-title {
+    font-size: 1.15rem;
+    font-weight: 800;
+    color: var(--text-dark);
+    margin-bottom: 1.25rem;
+    line-height: 1.2;
+}
+
+/* Pill Dashed Code Box */
+/* Pill Dashed Code Box - Updated to Solid Pill */
+.classic-code-btn {
+    background-color: #f8fafc;
+    color: var(--primary-green);
+    border: none; /* No border */
+    padding: 0.75rem 1.5rem;
+    border-radius: 100px; /* pill shape */
+    font-family: 'Montserrat', sans-serif;
+    font-weight: 800;
+    font-size: 1.1rem;
+    cursor: pointer;
+    text-align: center;
+    transition: all 0.3s ease;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 12px;
+    box-shadow: 0 4px 6px rgba(0,0,0,0.05); /* Soft shadow */
+    width: fit-content; /* Ensure it fits content */
+    margin: 0 auto;
+}
+
+
+.classic-code-btn:hover {
+    background-color: #ffffff;
+    box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+    transform: translateY(-2px);
+    color: #1e3c2f;
+}
+
+/* Extra Details */
+.classic-extra-info {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.info-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    font-size: 0.8rem;
+    color: #64748b;
+    font-weight: 600;
+}
+
+.info-row b {
+    color: var(--text-dark);
+}
+/* Mobile Coupon Fix */
+@media (max-width: 575px) {
+    .coupon-classic {
+        flex-direction: column;
+    }
+
+    .classic-left {
+        width: 100%;
+        padding: 2rem 1rem;
+        border-bottom: 2px dashed rgba(226, 232, 240, 1); /* Fallback/Blend */
+    }
+
+    .classic-right {
+        width: 100%;
+        padding: 2rem 1.5rem;
+        text-align: center;
+    }
+    
+    .classic-code-btn {
+        margin: 0 auto; /* Center button */
+        white-space: nowrap;
+        font-size: 1rem; /* Reduce size to fit */
+        width: fit-content;
+        max-width: 100%;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+
+    .classic-meta {
+        justify-content: center;
+    }
+
+    /* Adjust the internal dashed separator to horizontal at bottom */
+    .classic-left::after {
+        border-right: none;
+        border-bottom: 2px dashed rgba(255, 255, 255, 0.3);
+        top: auto;
+        bottom: 0;
+        left: 0;
+        right: 0;
+        width: 100%;
+        height: auto;
+    }
+
+    /* Reposition Notches for Horizontal Tear */
+    /* Left Notch */
+    .classic-left::before {
+        top: auto;
+        bottom: -11px;
+        left: -11px;
+        right: auto;
+        border-color: #e2e8f0; /* Reset border colors */
+        border-left-color: transparent; /* Optional refinement */
+    }
+
+    /* Right Notch */
+    .classic-left-notch-bottom {
+        top: auto;
+        bottom: -11px;
+        right: -11px;
+        border-color: #e2e8f0; /* Reset border colors */
+        border-right-color: transparent; /* Optional refinement */
+    }
+}
+
+/* =========================================
+   PRO MAX SHOPPING CART (MODERN UI)
+   ========================================= */
+
+.shopping-cart-page {
+    background-color: #fbfcff;
+    padding: 3rem 0;
+}
+
+.cart-container {
+    max-width: 1200px;
+    margin: 0 auto;
+}
+
+/* Items List Section */
+.cart-items-column {
+    background: #ffffff;
+    border-radius: 16px;
+    box-shadow: 0 4px 20px rgba(0,0,0,0.03);
+    padding: 1.5rem;
+}
+
+.pro-cart-item {
+    display: flex;
+    align-items: center;
+    padding: 2rem 0;
+    border-bottom: 1px solid #f1f5f9;
+    transition: background 0.2s ease;
+}
+
+.pro-cart-item:last-child {
+    border-bottom: none;
+}
+
+.pro-item-image {
+    width: 120px;
+    height: 120px;
+    object-fit: contain;
+    border-radius: 12px;
+    background: #f8fafc;
+    padding: 10px;
+    border: 1px solid #f1f5f9;
+}
+
+.pro-item-details {
+    flex: 1;
+    padding-left: 1.5rem;
+}
+
+.pro-item-category {
+    font-size: 0.75rem;
+    text-transform: uppercase;
+    color: #94a3b8;
+    font-weight: 700;
+    letter-spacing: 1px;
+    margin-bottom: 4px;
+}
+
+.pro-item-title {
+    font-size: 1.1rem;
+    font-weight: 700;
+    color: var(--text-dark);
+    margin-bottom: 0.5rem;
+    display: block;
+    text-decoration: none;
+}
+
+.pro-item-variants {
+    font-size: 0.85rem;
+    color: #64748b;
+}
+
+/* Quantity Control */
+.pro-qty-control {
+    display: flex;
+    align-items: center;
+    background: #f8fafc;
+    border-radius: 50px;
+    padding: 4px;
+    border: 1px solid #e2e8f0;
+    width: fit-content;
+}
+
+.qty-btn {
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    border: none;
+    background: white;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.qty-btn:hover:not(:disabled) {
+    background: var(--primary-green);
+    color: white;
+}
+
+.qty-input {
+    width: 40px;
+    text-align: center;
+    font-weight: 700;
+    border: none;
+    background: transparent;
+    -moz-appearance: textfield;
+}
+
+.qty-input::-webkit-inner-spin-button,
+.qty-input::-webkit-outer-spin-button {
+    -webkit-appearance: none;
+    appearance: none;
+    margin: 0;
+}
+
+/* Price Display */
+.pro-item-price-col {
+    width: 150px;
+    text-align: right;
+    padding-left: 1rem;
+}
+
+.pro-unit-price {
+    font-size: 0.85rem;
+    color: #94a3b8;
+    text-decoration: line-through;
+}
+
+.pro-total-price {
+    font-size: 1.2rem;
+    font-weight: 850;
+    color: var(--primary-green);
+    display: block;
+}
+
+.remove-btn {
+    background: none;
+    border: none;
+    color: #ef4444;
+    cursor: pointer;
+    padding: 8px;
+    border-radius: 8px;
+    transition: background 0.2s;
+    margin-left: 1rem;
+}
+
+.remove-btn:hover {
+    background: #fee2e2;
+}
+
+/* Sticky Summary Card */
+.pro-cart-summary {
+    position: sticky;
+    top: 100px;
+    background: #ffffff;
+    border-radius: 16px;
+    box-shadow: 0 4px 25px rgba(0,0,0,0.05);
+    padding: 2rem;
+    border: 1px solid #f1f5f9;
+}
+
+.summary-title {
+    font-size: 1.25rem;
+    font-weight: 800;
+    color: var(--text-dark);
+    margin-bottom: 2rem;
+    padding-bottom: 1rem;
+    border-bottom: 2px solid #f8fafc;
+}
+
+.summary-row {
+    display: flex;
+    justify-content: space-between;
+    margin-bottom: 1.25rem;
+}
+
+.summary-row.total {
+    margin-top: 1.5rem;
+    padding-top: 1.5rem;
+    border-top: 2px solid #f8fafc;
+}
+
+.summary-row.total .label {
+    font-weight: 800;
+    font-size: 1.1rem;
+    color: var(--text-dark);
+}
+
+.summary-row.total .value {
+    font-weight: 900;
+    font-size: 1.5rem;
+    color: var(--primary-green);
+}
+
+.checkout-btn {
+    display: block;
+    width: 100%;
+    background: var(--primary-green) !important;
+    color: white !important;
+    text-align: center;
+    padding: 1.2rem !important;
+    border-radius: 12px !important;
+    font-weight: 800 !important;
+    font-size: 1rem !important;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    margin-top: 1rem;
+    transition: all 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+}
+
+.checkout-btn:hover {
+    transform: translateY(-3px);
+    box-shadow: 0 10px 30px rgba(46, 94, 58, 0.3);
+}
+
+/* Hero refined */
+.breadcrumbs_other {
+    background: #ffffff !important;
+    border-bottom: 1px solid #f1f5f9;
+    padding: 2.5rem 0 !important;
+}
+
+.breadcrumb_content h3 {
+    font-weight: 900;
+    color: var(--text-dark);
+    font-size: 2.2rem;
+}
+
+@media (max-width: 768px) {
+    .cart-items-column {
+        padding: 1rem;
+    }
+
+    .pro-cart-item {
+        flex-direction: column;
+        align-items: flex-start;
+        padding: 1.5rem 0;
+    }
+    
+    .pro-item-image {
+        width: 80px;
+        height: 80px;
+        margin-bottom: 1rem;
+    }
+    
+    .pro-item-details {
+        padding-left: 0;
+        width: 100%;
+    }
+
+    .pro-item-title {
+        font-size: 1rem;
+    }
+    
+    .pro-item-details .d-flex.align-items-center.justify-content-between {
+        flex-wrap: wrap;
+        gap: 15px;
+        margin-top: 10px;
+    }
+    
+    .pro-qty-control {
+        order: 1;
+    }
+
+    .pro-item-price-col {
+        width: 100%; 
+        padding-left: 0;
+        text-align: left;
+        order: 3;
+        display: flex;
+        align-items: baseline;
+        gap: 10px;
+        margin-top: 10px;
+    }
+
+    .pro-total-price {
+        font-size: 1.1rem;
+    }
+    
+    .remove-btn {
+        order: 2;
+        margin-left: auto; 
+    }
+
+    .pro-cart-summary {
+        margin-top: 2rem;
+        padding: 1.5rem;
+    }
+}

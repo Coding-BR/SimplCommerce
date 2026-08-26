@@ -1,0 +1,67 @@
+.ic-digital-file-card {
+    background: linear-gradient(135deg, #f8fbff 0%, #f6faf8 100%);
+    container-type: inline-size;
+}
+
+.ic-digital-file-summary {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+    min-width: 0;
+    padding: 1rem;
+    border: 1px solid #b9dfc8;
+    border-radius: .75rem;
+    background: #ecf8f0;
+    color: #175c37;
+}
+
+.ic-digital-file-info {
+    min-width: 0;
+    overflow-wrap: anywhere;
+}
+
+.ic-digital-file-actions {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+    gap: .5rem;
+    flex: 0 0 auto;
+    max-width: 100%;
+}
+
+.ic-digital-file-actions .btn {
+    white-space: nowrap;
+}
+
+@media (max-width: 767.98px) {
+    .ic-digital-file-summary {
+        align-items: flex-start;
+        flex-direction: column;
+    }
+
+    .ic-digital-file-actions {
+        width: 100%;
+        justify-content: stretch;
+    }
+
+    .ic-digital-file-actions .btn {
+        flex: 1 1 8.5rem;
+    }
+}
+
+@container (max-width: 39rem) {
+    .ic-digital-file-summary {
+        align-items: flex-start;
+        flex-direction: column;
+    }
+
+    .ic-digital-file-actions {
+        width: 100%;
+        justify-content: stretch;
+    }
+
+    .ic-digital-file-actions .btn {
+        flex: 1 1 8.5rem;
+    }
+}

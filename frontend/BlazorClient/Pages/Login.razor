@@ -1,0 +1,156 @@
+@page "/login"
+@using BlazorClient.Core.Services
+@inject IAuthService AuthService
+@inject NavigationManager Navigation
+@inject AuthenticationStateProvider AuthStateProvider
+@inject ILocalizationService L
+@implements IDisposable
+
+<MudContainer MaxWidth="MaxWidth.Small" Class="ic-auth-page">
+    <MudPaper Elevation="0" Class="ic-auth-card pa-8 bg-white">
+        <div class="ic-auth-brand"><span>i</span><strong>ideal<em>creative</em></strong></div>
+        <div class="text-center mb-8">
+            <MudText Typo="Typo.h4" Class="fw-bold mb-2">@L.Get("Auth.Login")</MudText>
+            <MudText Typo="Typo.body2" Class="ynex-text-muted">Entre para acompanhar pedidos, dados e downloads.</MudText>
+        </div>
+
+        @if (!string.IsNullOrEmpty(errorMessage))
+        {
+            <MudAlert Severity="Severity.Error" Variant="Variant.Filled" Class="mb-6 rounded-lg ynex-alert">
+                @errorMessage
+            </MudAlert>
+        }
+
+        <!-- Email/Password Form -->
+        <EditForm Model="@loginModel" OnValidSubmit="@SignInWithEmail">
+            <DataAnnotationsValidator />
+
+            <div class="mb-6">
+                <MudTextField @bind-Value="loginModel.Email" 
+                              Label="@L.Get("Auth.Email")" 
+                              Variant="Variant.Outlined" 
+                              InputType="InputType.Email"
+                              Immediate="true"
+                              Placeholder="seu@email.com"
+                              For="@(() => loginModel.Email)"
+                              FullWidth="true"
+                              Class="mb-4" />
+
+                <MudTextField @bind-Value="loginModel.Password" 
+                              Label="@L.Get("Auth.Password")" 
+                              Variant="Variant.Outlined" 
+                              InputType="InputType.Password"
+                              Immediate="true"
+                              Placeholder="••••••••"
+                              For="@(() => loginModel.Password)"
+                              FullWidth="true" />
+
+                <div class="d-flex justify-end mt-2">
+                    <MudLink Href="/forgot-password" Underline="Underline.None" Color="Color.Primary" Class="fw-bold">
+                        @L.Get("Auth.ForgotPassword")
+                    </MudLink>
+                </div>
+            </div>
+
+            <MudButton ButtonType="ButtonType.Submit" 
+                       Variant="Variant.Filled" 
+                       Color="Color.Primary" 
+                       FullWidth="true" 
+                       Class="py-3 rounded-xl fw-bold"
+                       Disabled="@isLoading">
+                @if (isLoading)
+                {
+                    <MudProgressCircular Class="ms-n1" Size="Size.Small" Indeterminate="true" />
+                    <MudText Class="ms-2">@L.Get("Auth.LoggingIn")</MudText>
+                }
+                else
+                {
+                    @L.Get("Auth.Login")
+                }
+            </MudButton>
+        </EditForm>
+
+        <div class="text-center mt-8">
+            <MudText Typo="Typo.body2" Class="ynex-text-muted">
+                @L.Get("Auth.DontHaveAccount") 
+                <MudLink href="/register" Underline="Underline.None" Color="Color.Primary" Class="fw-bold ml-1">
+                    @L.Get("Auth.Register")
+                </MudLink>
+            </MudText>
+        </div>
+        <div class="ic-auth-trust"><span><i class="icon-lock"></i> Acesso protegido</span><span><i class="icon-check"></i> Dados sob seu controle</span></div>
+    </MudPaper>
+</MudContainer>
+
+@code {
+    [Parameter]
+    [SupplyParameterFromQuery]
+    public string? ReturnUrl { get; set; }
+
+    private LoginModel loginModel = new();
+    private bool isLoading = false;
+    private string? errorMessage;
+
+    protected override async Task OnInitializedAsync()
+    {
+        L.OnLanguageChanged += HandleLanguageChanged;
+
+        var authState = await AuthStateProvider.GetAuthenticationStateAsync();
+        var user = authState.User;
+
+        if (user.Identity?.IsAuthenticated == true)
+        {
+            Navigation.NavigateTo("/my-account");
+        }
+    }
+
+    private void HandleLanguageChanged()
+    {
+        InvokeAsync(StateHasChanged);
+    }
+
+    public void Dispose()
+    {
+        L.OnLanguageChanged -= HandleLanguageChanged;
+    }
+
+    private async Task SignInWithEmail()
+    {
+        isLoading = true;
+        errorMessage = null;
+
+        try
+        {
+            var result = await AuthService.SignInWithEmail(loginModel.Email, loginModel.Password);
+
+            if (result.Success)
+            {
+                await ((CustomAuthenticationStateProvider)AuthStateProvider).RefreshAuthenticationState();
+                Navigation.NavigateTo(ReturnUrl ?? "/");
+            }
+            else
+            {
+                errorMessage = result.Error ?? "Email ou senha inválidos";
+            }
+        }
+        catch (Exception ex)
+        {
+            errorMessage = $"Erro: {ex.Message}";
+        }
+        finally
+        {
+            isLoading = false;
+        }
+    }
+
+    public class LoginModel
+    {
+        [Required(ErrorMessage = "Email é obrigatório")]
+        [EmailAddress(ErrorMessage = "Email inválido")]
+        public string Email { get; set; } = string.Empty;
+
+        [Required(ErrorMessage = "Senha é obrigatória")]
+        public string Password { get; set; } = string.Empty;
+    }
+}
+

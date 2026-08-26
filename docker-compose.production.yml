@@ -1,0 +1,94 @@
+services:
+  frontend:
+    build:
+      context: ./frontend/BlazorClient
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    ports:
+      - "${FRONTEND_PORT:-80}:80"
+    depends_on:
+      api:
+        condition: service_started
+
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    # O proxy reverso (Caddy/Nginx/Cloudflare Tunnel) deve ser a única
+    # entrada pública. Por padrão a API fica acessível somente localmente.
+    ports:
+      - "${API_BIND:-127.0.0.1}:${API_PORT:-8080}:8080"
+    volumes:
+      - idealcreative-dataprotection:/home/app/.aspnet/DataProtection-Keys
+    environment:
+      ASPNETCORE_ENVIRONMENT: Production
+      ConnectionStrings__DefaultConnection: ${DATABASE_URL:?DATABASE_URL is required}
+      Jwt__Issuer: ${JWT_ISSUER:?JWT_ISSUER is required}
+      Jwt__Key: ${JWT_KEY:?JWT_KEY is required}
+      Admin__Email: ${ADMIN_EMAIL:?ADMIN_EMAIL is required}
+      Admin__Password: ${ADMIN_PASSWORD:?ADMIN_PASSWORD is required}
+      Storage__Endpoint: ${R2_ENDPOINT:?R2_ENDPOINT is required}
+      Storage__AccessKey: ${R2_ACCESS_KEY:?R2_ACCESS_KEY is required}
+      Storage__SecretKey: ${R2_SECRET_KEY:?R2_SECRET_KEY is required}
+      Storage__Bucket: ${R2_BUCKET:?R2_BUCKET is required}
+      Storage__PublicBaseUrl: ${R2_PUBLIC_BASE_URL:?R2_PUBLIC_BASE_URL is required}
+      Storage__ProxyBaseUrl: ${FRONTEND_PUBLIC_URL:?FRONTEND_PUBLIC_URL is required}
+      Storage__UseSsl: "true"
+      Frontend__PublicUrl: ${FRONTEND_PUBLIC_URL:?FRONTEND_PUBLIC_URL is required}
+      Payments__PayPal__BaseUrl: ${PAYPAL_BASE_URL:-https://api-m.paypal.com}
+      Payments__PayPal__ClientId: ${PAYPAL_CLIENT_ID:?PAYPAL_CLIENT_ID is required}
+      Payments__PayPal__Secret: ${PAYPAL_SECRET:?PAYPAL_SECRET is required}
+      Payments__PayPal__WebhookSecret: ${PAYPAL_WEBHOOK_SECRET:?PAYPAL_WEBHOOK_SECRET is required}
+      Payments__MercadoPago__AccessToken: ${MERCADOPAGO_ACCESS_TOKEN:?MERCADOPAGO_ACCESS_TOKEN is required}
+      Payments__MercadoPago__WebhookSecret: ${MERCADOPAGO_WEBHOOK_SECRET:?MERCADOPAGO_WEBHOOK_SECRET is required}
+      Email__Smtp__Host: ${SMTP_HOST:?SMTP_HOST is required}
+      Email__Smtp__Port: ${SMTP_PORT:-587}
+      Email__Smtp__UseSsl: ${SMTP_USE_SSL:-true}
+      Email__Smtp__Username: ${SMTP_USERNAME:?SMTP_USERNAME is required}
+      Email__Smtp__Password: ${SMTP_PASSWORD:?SMTP_PASSWORD is required}
+      Email__Smtp__FromEmail: ${SMTP_FROM_EMAIL:?SMTP_FROM_EMAIL is required}
+      Email__Smtp__FromName: ${SMTP_FROM_NAME:-IdealCreative}
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-idealcreative}
+      POSTGRES_USER: ${POSTGRES_USER:-idealcreative}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}
+    volumes:
+      - idealcreative-postgres:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+
+  backup:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      PGHOST: postgres
+      PGDATABASE: ${POSTGRES_DB:-idealcreative}
+      PGUSER: ${POSTGRES_USER:-idealcreative}
+      PGPASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}
+    volumes:
+      - idealcreative-backups:/backups
+    command: >-
+      sh -c 'while true; do
+        pg_dump --format=custom --no-owner --file=/backups/idealcreative-$$(date +%Y%m%d-%H%M%S).dump &&
+        find /backups -type f -name "idealcreative-*.dump" -mtime +14 -delete;
+        sleep 86400;
+      done'
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+volumes:
+  idealcreative-postgres:
+  idealcreative-dataprotection:
+  idealcreative-backups:

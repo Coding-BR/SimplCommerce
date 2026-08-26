@@ -1,119 +1,59 @@
-# A simple, cross platform, modulith ecommerce system built on .NET Core [![Join the chat at https://gitter.im/simplcommerce/SimplCommerce](https://badges.gitter.im/simplcommerce/SimplCommerce.svg)](https://gitter.im/simplcommerce/SimplCommerce?utm_source=badge&utm_medium=badge&utm_campaign=pr-badge&utm_content=badge)
-[![FOSSA Status](https://app.fossa.com/api/projects/git%2Bgithub.com%2Fsimplcommerce%2FSimplCommerce.svg?type=shield)](https://app.fossa.com/projects/git%2Bgithub.com%2Fsimplcommerce%2FSimplCommerce?ref=badge_shield)
+# IdealCreative VPS
 
-## High level architecture
+Nova base da IdealCreative em C#/.NET 10, separada do projeto Firebase original. O front-end Blazor WebAssembly conserva a navegação útil da loja, mas foi simplificado e ligado a uma API própria em ASP.NET Core, PostgreSQL e armazenamento S3 compatível (MinIO local ou Cloudflare R2 em produção). Firebase, Redis, GeoIP, assinaturas, cripto e nota fiscal não fazem parte desta versão enxuta.
 
-![SimpleCommerce - Modulith architecture](https://raw.githubusercontent.com/simplcommerce/SimplCommerce/master/modular-architecture.png)
+## Executar somente via Docker
 
-## Build Status
-| Build server    | Platform       | Status      |
-|-----------------|----------------|-------------|
-| Azure Pipelines | All            |[![Build Status](https://simplcommerce.visualstudio.com/simplcommerce/_apis/build/status/simplcommerce.SimplCommerce?branchName=master)](https://simplcommerce.visualstudio.com/simplcommerce/_build/latest?definitionId=1&branchName=master)
-|Travis           | Linux / MacOS  |[![Build Status](https://travis-ci.org/simplcommerce/SimplCommerce.svg?branch=master)](https://travis-ci.org/simplcommerce/SimplCommerce) |
+```powershell
+cd C:\Users\adria\Desktop\forum\idealcreative-vps
+docker compose up -d --build
+```
 
-## Online demo (Azure Website)
-- Store front: http://demo.simplcommerce.com
-- Administration: http://demo.simplcommerce.com/admin Email: admin@simplcommerce.com Password: 1qazZAQ!
+- Loja: http://localhost:5289
+- API: http://localhost:5288
+- Health: http://localhost:5288/health/ready
+- PostgreSQL: localhost:55432
+- MinIO API: http://localhost:59100
+- MinIO Console: http://localhost:59101
+- Caixa de e-mails de desenvolvimento (Mailpit): http://localhost:59102
 
-## Docker
+Login administrativo local (apenas desenvolvimento): `admin@idealcreative.local` / `IdealCreative#2026`. Em VPS, substituir todos os segredos por variáveis de ambiente e não usar estas credenciais.
 
-For testing purpose only `docker run -p 5000:80 simplcommerce/ci-build`
+## Já funcional
 
-Continuous deployment: https://ci.simplcommerce.com
+- login interno e cadastro com ASP.NET Identity + JWT;
+- recuperação de senha por e-mail SMTP, com link de uso único válido por uma hora;
+- catálogo público, detalhe, filtros de busca/preço e produtos em PostgreSQL;
+- criação, edição, publicação e exclusão de produtos para administrador, incluindo produtos digitais;
+- categorias e tags com CRUD administrativo;
+- carrinho persistente por usuário;
+- cupom de desconto e cálculo de subtotal/total;
+- criação, consulta paginada e transições controladas de status dos pedidos;
+- reserva atômica de estoque e liberação automática após duas horas sem pagamento;
+- upload de imagem e arquivo digital via API para MinIO (mesma interface S3 do R2), com download autorizado e URL temporária;
+- checkout local e adaptadores PayPal/Mercado Pago ativados quando suas credenciais são configuradas;
+- avaliações de compradores confirmados, uma por cliente/produto, com moderação administrativa;
+- perfil do cliente, lista de clientes e promoção/rebaixamento de administradores;
+- dashboard administrativo com dados reais, health checks e composição Docker compatível com ARM64.
 
-## Visual Studio 2022 and SQL Server
+## Produção em VPS
 
-#### Prerequisites
+Use a composição separada, que não publica PostgreSQL nem MinIO na internet e espera todos os segredos por variáveis de ambiente:
 
-- SQL Server
-- Visual Studio 2022 and .NET 8
+```bash
+docker compose -f docker-compose.production.yml up -d --build
+```
 
-#### Steps to run
+Copie `.env.production.example` para um arquivo seguro fora do repositório e preencha todos os valores. Na produção, use Cloudflare R2 (endpoint S3 compatível) e um proxy reverso/Cloudflare Tunnel na frente do front-end. O Nginx do contêiner encaminha `/api` internamente, portanto o navegador não precisa acessar a porta privada da API.
 
-- Update the connection string: Open appsettings.json in src/SimplCommerce.WebHost. 
-  The default is configured for a local SQL Server
-    ```json
-    {
-      "DefaultConnection": "Server=.;Database=SimplCommerce;Trusted_Connection=True;TrustServerCertificate=true"
-    }
-    ```
-  If you are using Visual Studio LocalDB, change it to
-    ```json
-    {
-      "DefaultConnection": "Server=(localdb)\\mssqllocaldb;Database=SimplCommerce;Trusted_Connection=True;TrustServerCertificate=true;MultipleActiveResultSets=true"
-    }
-    ```
-- Ensure you have a database named `SimplCommerce` created in your SQL instance, or change the `Database` name in the connection string to match your environment.
-- Build the whole solution.
-- In Solution Explorer, make sure that SimplCommerce.WebHost is selected as the Startup Project
-- Open the Package Manager Console Window and make sure that SimplCommerce.WebHost is selected as the Default project. Then type "Update-Database" then press "Enter". This action will create the database schema.
-- In Visual Studio, press "Control + F5".
-- The back-office can be accessed via /Admin using the following built-in account: admin@simplcommerce.com, 1qazZAQ!
+Os webhooks de pagamento exigem os segredos configurados; a captura PayPal valida o status `COMPLETED` antes de marcar o pedido como pago. O serviço `backup` cria diariamente um `pg_dump` no volume `idealcreative-backups` e retém 14 dias. Consulte [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) para regras e restauração.
 
-## Mac/Linux with PostgreSQL
+Para recuperação de senha na VPS, preencha as variáveis `SMTP_*` no arquivo seguro de ambiente. Utilize a credencial SMTP ou *app password* do provedor de e-mail; nunca use a senha da conta principal. Em desenvolvimento, o serviço Mailpit recebe os e-mails localmente e permite conferir o link sem enviar mensagens externas.
 
-#### Prerequisite
+## Pendências antes da abertura da loja
 
-- PostgreSQL
-- [.NET Core SDK 8.0](https://www.microsoft.com/net/download/all)
-- Entity Framework Core Tools (`dotnet tool install --global dotnet-ef`)
+1. Adicionar migrações EF Core versionadas para substituir o bootstrap SQL incremental.
+2. Validar PayPal e Mercado Pago com contas reais e webhooks do domínio definitivo.
+3. Adicionar fila persistente para e-mail, impressão Arduino e integração futura com a máquina.
 
-#### Steps to run
-
-- Update the connection string in appsettings.json in SimplCommerce.WebHost.
-- Run the simpl-build.sh file by issuing the following command: "sudo ./simpl-build.sh". For ubuntu 18: "sudo bash simpl-build.sh"
-- In the terminal, navigate to "src/SimplCommerce.WebHost" and type "dotnet run" and then hit "Enter".
-- Open http://localhost:49206 in the browser. The back-office can be accessed via /Admin using the following built-in account: admin@simplcommerce.com, 1qazZAQ!
-
-## Technologies and frameworks used:
-
-- ASP.NET Core
-- Entity Framework Core
-- ASP.NET Identity Core
-- Angular 1.6.3
-- MediatR 7.0.0 for domain event
-
-## Docs
-
-https://docs.simplcommerce.com/
-
-## Roadmap
-
-https://github.com/simplcommerce/SimplCommerce/wiki/Roadmap
-
-## How to contribute
-
-- Star this project on GitHub.
-- Report bugs or suggest features by creating new issues or adding comments to issues
-- Submit pull requests
-- Spread the word by blogging about SimplCommerce or sharing it on social networks
-- Donate to us
-
-## Contributors
-
-This project exists thanks to all the people who contribute.
-
-<a href="https://github.com/simplcommerce/SimplCommerce/graphs/contributors"><img src="https://opencollective.com/simplcommerce/contributors.svg?width=890" title="contributors" alt="contributors" /></a>
-
-## Backers
-
-Love our work and help us continue our activities? [[Become a backer](https://opencollective.com/simplcommerce#backer)]
-
-<a href="https://opencollective.com/simplcommerce#backers" target="_blank"><img src="https://opencollective.com/simplcommerce/backers.svg?width=890"></a>
-
-## Sponsors
-
-Become a sponsor and get your logo on our README on Github with a link to your site. [[Become a sponsor](https://opencollective.com/simplcommerce#sponsor)]
-
-<a href="https://opencollective.com/simplcommerce/sponsor/0/website" target="_blank"><img src="https://opencollective.com/simplcommerce/sponsor/0/avatar.svg"></a>
-<a href="https://opencollective.com/simplcommerce/sponsor/1/website" target="_blank"><img src="https://opencollective.com/simplcommerce/sponsor/1/avatar.svg"></a>
-<a href="https://opencollective.com/simplcommerce/sponsor/2/website" target="_blank"><img src="https://opencollective.com/simplcommerce/sponsor/2/avatar.svg"></a>
-<a href="https://opencollective.com/simplcommerce/sponsor/3/website" target="_blank"><img src="https://opencollective.com/simplcommerce/sponsor/3/avatar.svg"></a>
-<a href="https://opencollective.com/simplcommerce/sponsor/4/website" target="_blank"><img src="https://opencollective.com/simplcommerce/sponsor/4/avatar.svg"></a>
-
-## License
-
-SimplCommerce is licensed under the Apache 2.0 license.
-
-
-[![FOSSA Status](https://app.fossa.com/api/projects/git%2Bgithub.com%2Fsimplcommerce%2FSimplCommerce.svg?type=large)](https://app.fossa.com/projects/git%2Bgithub.com%2Fsimplcommerce%2FSimplCommerce?ref=badge_large)
+O projeto Firebase original não é alterado e não é carregado pelo novo front-end.

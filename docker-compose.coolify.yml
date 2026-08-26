@@ -1,41 +1,65 @@
 version: '3.8'
 
 services:
-  web:
+  frontend:
+    build:
+      context: ./frontend/BlazorClient
+      dockerfile: Dockerfile
+    container_name: idealcreative-frontend
+    restart: always
+    ports:
+      - "80:80"
+    depends_on:
+      api:
+        condition: service_started
+
+  api:
     build:
       context: .
       dockerfile: Dockerfile
-    container_name: simplcommerce-web
+    container_name: idealcreative-api
     restart: always
+    ports:
+      - "8080:8080"
+    volumes:
+      - idealcreative-dataprotection:/home/app/.aspnet/DataProtection-Keys
     environment:
       - ASPNETCORE_ENVIRONMENT=Production
-      - ASPNETCORE_URLS=http://+:80
       - ASPNETCORE_FORWARDEDHEADERS_ENABLED=true
-      - DB_HOST=simpldb
-      - DB_USER=postgres
-      - PGPASSWORD=EcYVW5Y6fAll62opS3CTgvK0hdZrVunc
-      - ConnectionStrings__DefaultConnection=User ID=postgres;Password=EcYVW5Y6fAll62opS3CTgvK0hdZrVunc;Host=simpldb;Port=5432;Database=simplcommerce;Pooling=true;
-    ports:
-      - "5000:80"
+      - ConnectionStrings__DefaultConnection=Host=postgres;Port=5432;Database=idealcreative;Username=postgres;Password=EcYVW5Y6fAll62opS3CTgvK0hdZrVunc;Pooling=true;
+      - Jwt__Issuer=https://www.idealcreative.com.br
+      - Jwt__Key=IdealCreative-Production-Secret-Jwt-Key-2026-ARM64!
+      - Admin__Email=admin@idealcreative.com.br
+      - Admin__Password=IdealCreative#2026
+      - Storage__Endpoint=minio:9000
+      - Storage__AccessKey=idealcreative
+      - Storage__SecretKey=EcYVW5Y6fAll62opS3CTgvK0hdZrVunc
+      - Storage__Bucket=idealcreative
+      - Storage__PublicBaseUrl=https://www.idealcreative.com.br/api/storage/public
+      - Storage__ProxyBaseUrl=https://www.idealcreative.com.br
+      - Storage__UseSsl=false
+      - Frontend__PublicUrl=https://www.idealcreative.com.br
+      - Cors__Origins__0=https://www.idealcreative.com.br
     depends_on:
-      simpldb:
+      postgres:
         condition: service_healthy
 
-  simpldb:
+  postgres:
     image: postgres:16-alpine
-    container_name: simplcommerce-db
+    container_name: idealcreative-db
     restart: always
     environment:
+      - POSTGRES_DB=idealcreative
       - POSTGRES_USER=postgres
       - POSTGRES_PASSWORD=EcYVW5Y6fAll62opS3CTgvK0hdZrVunc
-      - POSTGRES_DB=postgres
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      test: ["CMD-SHELL", "pg_isready -U postgres -d idealcreative"]
       interval: 5s
       timeout: 5s
-      retries: 5
+      retries: 10
 
 volumes:
   postgres_data:
+  idealcreative-dataprotection:

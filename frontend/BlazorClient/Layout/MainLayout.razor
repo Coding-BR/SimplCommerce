@@ -1,0 +1,63 @@
+@inherits LayoutComponentBase
+
+@using BlazorClient.Core.Interfaces
+@using BlazorClient.Core.Services
+@using BlazorClient.Models
+@using BlazorClient.Layout
+@inject ISettingsService SettingsService
+@inject ICartService CartService
+@inject IClientLocaleService LocaleService
+@inject ILocalizationService L
+@inject CustomAuthenticationStateProvider AuthStateProvider
+@implements IDisposable
+
+<MudLayout>
+    <Header Settings="@siteSettings" />
+    <MudMainContent Class="ic-store-main">
+        <div class="ic-store-page-shell">
+            <CascadingValue Value="@siteSettings">
+                @Body
+            </CascadingValue>
+        </div>
+    </MudMainContent>
+</MudLayout>
+
+@code {
+    private SiteSettings siteSettings = new SiteSettings();
+    
+    [Inject] private NavigationManager Navigation { get; set; } = default!;
+    
+    protected override async Task OnInitializedAsync()
+    {
+        // LocaleService.InitializeAsync() is now called in Program.cs to avoid deadlocks
+        siteSettings = await SettingsService.GetSettings();
+        
+        if (SettingsService is SettingsService service)
+        {
+            service.OnSettingsChanged += RefreshSettings;
+        }
+        
+        L.OnLanguageChanged += HandleLanguageChanged;
+    }
+    
+    private async void RefreshSettings()
+    {
+        siteSettings = await SettingsService.GetSettings();
+        StateHasChanged();
+    }
+    
+    private async void HandleLanguageChanged()
+    {
+        siteSettings = await SettingsService.GetSettings();
+        await InvokeAsync(StateHasChanged);
+    }
+    
+    public void Dispose()
+    {
+        if (SettingsService is SettingsService service)
+        {
+            service.OnSettingsChanged -= RefreshSettings;
+        }
+        L.OnLanguageChanged -= HandleLanguageChanged;
+    }
+}

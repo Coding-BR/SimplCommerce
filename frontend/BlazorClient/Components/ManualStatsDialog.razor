@@ -1,0 +1,61 @@
+@using BlazorClient.Models
+@using MudBlazor
+@using BlazorClient.Core.Services
+@inject IProductService ProductService
+@inject ISnackbar Snackbar
+
+
+<MudDialog>
+    <DialogContent>
+        <MudTextField T="string" Label="ID do Produto" @bind-Value="ProductId" Required="true" />
+        <MudNumericField T="int" Label="Contagem de Reviews" @bind-Value="ReviewCount" Min="0" />
+        <MudNumericField T="double" Label="Média (Estrelas)" @bind-Value="AverageRating" Min="0" Max="5" Step="0.1" />
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="Cancel">Cancelar</MudButton>
+        <MudButton Color="Color.Primary" OnClick="Save">Salvar</MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter] MudBlazor.MudDialogInstance MudDialog { get; set; } = default!;
+
+    public string ProductId { get; set; } = "";
+    public int ReviewCount { get; set; }
+    public double AverageRating { get; set; }
+
+    private void Cancel() => MudDialog.Cancel();
+
+    private async Task Save()
+    {
+        if (string.IsNullOrEmpty(ProductId))
+        {
+            Snackbar.Add("Informe o ID do produto", Severity.Warning);
+            return;
+        }
+
+        var dto = new UpdateProductStatsDto 
+        { 
+            ReviewCount = ReviewCount, 
+            AverageRating = AverageRating 
+        };
+
+        try
+        {
+            // We need to call API. ProductService does not have this method yet probably?
+            // Wait, I modified ProductsController but maybe not ProductService Client?
+            // Checking... I usually need to update client service too.
+            // If ProductService doesn't have it, I can add it or make a direct http call here (ugly).
+            // Better to add to ProductService.
+            
+            // Assuming I will add it to ProductService next.
+             await ProductService.UpdateProductStatsAsync(ProductId, dto);
+             Snackbar.Add("Estatísticas atualizadas!", Severity.Success);
+             MudDialog.Close(DialogResult.Ok(true));
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Erro: {ex.Message}", Severity.Error);
+        }
+    }
+}

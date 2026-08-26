@@ -1,0 +1,389 @@
+@using BlazorClient.Core.Interfaces
+@page "/admin/coupons"
+@using BlazorClient.Core.Services
+@using BlazorClient.Models
+@using Microsoft.AspNetCore.Authorization
+@attribute [Authorize(Roles = "Admin")]
+@inject ICouponService CouponService
+@inject IJSRuntime JSRuntime
+@inject ILocalizationService L
+@implements IDisposable
+
+<PageTitle>Cupons de desconto - Admin</PageTitle>
+
+<div class="container ic-admin-page">
+    <div class="admin-page-header ic-admin-page-heading d-flex justify-content-between align-items-end mb-4">
+        <div><span class="ic-admin-kicker">COMERCIAL / CONVERSÃO</span><h1>Cupons de desconto</h1><p>Crie campanhas, defina limites e acompanhe a utilização dos descontos.</p></div>
+        <button class="btn btn-primary px-4 ic-admin-heading-action" @onclick="CreateNew">
+            <i class="ion-android-add"></i> Novo cupom
+        </button>
+    </div>
+
+    @if (isLoading)
+    {
+        <div class="text-center">
+            <div class="spinner-border" role="status"></div>
+        </div>
+    }
+    else
+    {
+        <div class="ic-admin-stat-strip ic-coupon-stats">
+            <div class="ic-admin-stat"><span class="ic-admin-stat-icon teal"><i class="icon-tag"></i></span><span><strong>@coupons.Count</strong><small>Cupons cadastrados</small></span></div>
+            <div class="ic-admin-stat"><span class="ic-admin-stat-icon ink"><i class="icon-check"></i></span><span><strong>@coupons.Count(coupon => coupon.IsActive)</strong><small>Campanhas ativas</small></span></div>
+            <div class="ic-admin-stat"><span class="ic-admin-stat-icon amber"><i class="icon-basket"></i></span><span><strong>@coupons.Sum(coupon => coupon.CurrentUsesGlobal)</strong><small>Utilizações registradas</small></span></div>
+            <div class="ic-admin-stat"><span class="ic-admin-stat-icon coral"><i class="icon-refresh"></i></span><span><strong>@coupons.Count(coupon => coupon.IsRecurring)</strong><small>Cupons recorrentes</small></span></div>
+        </div>
+
+        <div class="ic-admin-table-shell">
+        <div class="ic-table-caption"><div><span class="ic-admin-kicker">CAMPANHAS</span><strong>Cupons cadastrados</strong></div><span>@coupons.Count registro(s)</span></div>
+        <div class="table-responsive ic-admin-table-card">
+            <table class="table table-hover ic-admin-mobile-table">
+                <thead class="thead-light">
+                    <tr>
+                        <th>@L.Get("Admin.Coupons.TableCode")</th>
+                        <th>@L.Get("Admin.Coupons.DiscountType")</th>
+                        <th>@L.Get("Admin.Coupons.DiscountValue")</th>
+                        <th>@L.Get("Admin.Coupons.MinPurchase")</th>
+                        <th>@L.Get("Admin.Coupons.TableStatus")</th>
+                        <th>@L.Get("Admin.Coupons.TableUses")</th>
+                        <th>@L.Get("Admin.Common.Date")</th>
+                        <th>@L.Get("Admin.Common.Actions")</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var coupon in coupons)
+                    {
+                        <tr>
+                            <td data-label="Código"><strong>@coupon.Code</strong></td>
+                            <td data-label="Tipo"><span class="ic-coupon-type">@DiscountTypeLabel(coupon.DiscountType)</span></td>
+                            <td data-label="Desconto">
+                                @if(coupon.DiscountType == "Percentage")
+                                {
+                                    <span>@coupon.Value%</span>
+                                }
+                                else
+                                {
+                                    <span>@L.FormatCurrency(coupon.Value)</span>
+                                }
+                            </td>
+                            <td data-label="Compra mínima">@L.FormatCurrency(coupon.MinPurchaseAmount)</td>
+                            <td data-label="Status">
+                                @if (coupon.IsActive)
+                                {
+                                    <span class="badge badge-success">@L.Get("Admin.Common.Active")</span>
+                                }
+                                else
+                                {
+                                    <span class="badge badge-secondary">@L.Get("Admin.Common.Inactive")</span>
+                                }
+                            </td>
+                            <td data-label="Usos">
+                                @coupon.CurrentUsesGlobal / @(coupon.MaxUsesGlobal.HasValue ? coupon.MaxUsesGlobal.Value.ToString() : "∞")
+                            </td>
+                            <td data-label="Validade">
+                                <small>
+                                    @if(coupon.StartDate.HasValue) { <div>@L.Get("Admin.Coupons.ValidFrom"): @L.FormatDate(coupon.StartDate.Value)</div> }
+                                    @if(coupon.EndDate.HasValue) { <div>@L.Get("Admin.Coupons.ValidUntil"): @L.FormatDate(coupon.EndDate.Value)</div> }
+                                    @if(coupon.IsRecurring) { <div class="text-info">@L.Get("Admin.Coupons.IsRecurring")</div> }
+                                </small>
+                            </td>
+                            <td data-label="Ações">
+                                <div class="d-flex gap-2"><button class="btn btn-sm btn-outline-secondary" @onclick="() => Edit(coupon)"><i class="icon-pencil"></i> Editar</button>
+                                <button class="btn btn-sm btn-outline-danger" @onclick="() => Delete(coupon.Code)"><i class="icon-trash"></i> Excluir</button></div>
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+        </div>
+    }
+
+    @if (showEditor)
+    {
+        <div class="modal fade show" style="display:block; background-color: rgba(0,0,0,0.5);" tabindex="-1" role="dialog">
+            <div class="modal-dialog modal-lg" role="document">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <h5 class="modal-title">@(isEditing ? L.Get("Admin.Common.EditCoupon") : L.Get("Admin.Common.NewCoupon"))</h5>
+                        <button type="button" class="close" @onclick="CloseEditor">
+                            <span aria-hidden="true">&times;</span>
+                        </button>
+                    </div>
+                    <div class="modal-body">
+                        <EditForm Model="@editingCoupon" OnValidSubmit="SaveCoupon">
+                            <DataAnnotationsValidator />
+                            <ValidationSummary />
+
+                            <div class="form-row">
+                                <div class="form-group col-md-6">
+                                    <label>@L.Get("Admin.Coupons.CouponCode")</label>
+                                    <InputText class="form-control" @bind-Value="editingCoupon.Code" disabled="@isEditing" />
+                                </div>
+                                <div class="form-group col-md-6">
+                                    <label>@L.Get("Admin.Coupons.ActiveLabel")</label>
+                                    <div class="form-check ml-2">
+                                        <InputCheckbox class="form-check-input" @bind-Value="editingCoupon.IsActive" checked="@editingCoupon.IsActive" />
+                                        <label class="form-check-label">@L.Get("Admin.Coupons.IsActiveLabel")</label>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="form-row">
+                                <div class="form-group col-md-6">
+                                    <label>@L.Get("Admin.Coupons.DiscountType")</label>
+                                    <InputSelect class="form-control" @bind-Value="editingCoupon.DiscountType">
+                                        <option value="Percentage">@L.Get("Admin.Coupons.Percentage")</option>
+                                        <option value="FixedAmount">@L.Get("Admin.Coupons.FixedAmount")</option>
+                                    </InputSelect>
+                                </div>
+                                <div class="form-group col-md-6">
+                                    <label>@L.Get("Admin.Coupons.DiscountValue")</label>
+                                    <InputNumber class="form-control" @bind-Value="editingCoupon.Value" />
+                                </div>
+                            </div>
+
+                            <div class="form-group">
+                                <label>@L.Get("Admin.Coupons.MinPurchase")</label>
+                                <InputNumber class="form-control" @bind-Value="editingCoupon.MinPurchaseAmount" />
+                            </div>
+
+                            <div class="form-row">
+                                <div class="form-group col-md-6">
+                                    <label>@L.Get("Admin.Coupons.ValidFrom")</label>
+                                    <InputDate class="form-control" @bind-Value="editingCoupon.StartDate" />
+                                </div>
+                                <div class="form-group col-md-6">
+                                    <label>@L.Get("Admin.Coupons.ValidUntil")</label>
+                                    <InputDate class="form-control" @bind-Value="editingCoupon.EndDate" />
+                                </div>
+                            </div>
+
+                            <div class="form-group">
+                                <div class="form-check">
+                                    <InputCheckbox class="form-check-input" @bind-Value="editingCoupon.IsRecurring" />
+                                    <label class="form-check-label">@L.Get("Admin.Coupons.IsRecurring")</label>
+                                </div>
+                            </div>
+
+                            <div class="form-row">
+                                <div class="form-group col-md-6">
+                                    <label>@L.Get("Admin.Coupons.MaxUses")</label>
+                                    <InputNumber class="form-control" @bind-Value="editingCoupon.MaxUsesGlobal" />
+                                </div>
+                                <div class="form-group col-md-6">
+                                    <label>@L.Get("Admin.Coupons.UsesPerUser")</label>
+                                    <InputNumber class="form-control" @bind-Value="editingCoupon.MaxUsesPerUser" />
+                                </div>
+                            </div>
+
+                            <div class="modal-footer">
+                                <button type="button" class="btn btn-secondary" @onclick="CloseEditor">@L.Get("Admin.Common.Cancel")</button>
+                                <button type="submit" class="btn btn-primary">@L.Get("Admin.Common.Save")</button>
+                            </div>
+                        </EditForm>
+                    </div>
+                </div>
+            </div>
+        </div>
+    }
+</div>
+
+@if (isDeleteModalOpen && couponToDelete != null)
+{
+    <div class="modal fade show d-block" tabindex="-1" style="background-color: rgba(0,0,0,0.7);">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content border-0 shadow">
+                <div class="modal-header bg-danger text-white">
+                    <h5 class="modal-title">@L.Get("Admin.Coupons.DeleteModalTitle")</h5>
+                    <button type="button" class="btn-close btn-close-white" @onclick="CloseDeleteModal"></button>
+                </div>
+                <div class="modal-body p-4">
+                    <p class="mb-3">
+                        @String.Format(L.Get("Admin.Coupons.DeleteConfirm"), couponToDelete)
+                    </p>
+                    <div class="alert alert-warning mb-0">
+                        <i class="icon-info me-2"></i>
+                        @L.Get("Admin.Coupons.CannotBeUndone")
+                    </div>
+                </div>
+                <div class="modal-footer bg-light">
+                    <button type="button" class="btn btn-secondary" @onclick="CloseDeleteModal" disabled="@isProcessingDelete">
+                        @L.Get("Admin.Common.Cancel")
+                    </button>
+                    <button type="button" class="btn btn-danger px-4" @onclick="ConfirmDeleteCoupon" disabled="@isProcessingDelete">
+                        @if (isProcessingDelete)
+                        {
+                            <span class="spinner-border spinner-border-sm me-2" role="status"></span>
+                            <span>@L.Get("Admin.Common.Deleting")</span>
+                        }
+                        else
+                        {
+                            <i class="icon-trash me-2"></i>
+                            <span>@L.Get("Admin.Coupons.ConfirmDeleteButton")</span>
+                        }
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    private List<Coupon> coupons = new List<Coupon>();
+    private bool isLoading = true;
+    private bool showEditor = false;
+    private bool isEditing = false;
+    private CreateCouponDto editingCoupon = new CreateCouponDto();
+    
+    // Modal state
+    private bool isDeleteModalOpen = false;
+    private bool isProcessingDelete = false;
+    private string? couponToDelete;
+
+    protected override async Task OnInitializedAsync()
+    {
+        L.OnLanguageChanged += HandleLanguageChanged;
+        await LoadCoupons();
+    }
+
+    public void Dispose()
+    {
+        L.OnLanguageChanged -= HandleLanguageChanged;
+    }
+
+    private void HandleLanguageChanged()
+    {
+        InvokeAsync(StateHasChanged);
+    }
+
+    private async Task LoadCoupons()
+    {
+        isLoading = true;
+        try
+        {
+            coupons = await CouponService.GetCoupons();
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine(ex.Message);
+        }
+        finally
+        {
+            isLoading = false;
+        }
+    }
+
+    private void CreateNew()
+    {
+        editingCoupon = new CreateCouponDto { StartDate = DateTime.Today, EndDate = DateTime.Today.AddMonths(1) };
+        isEditing = false;
+        showEditor = true;
+    }
+
+    private void Edit(Coupon coupon)
+    {
+        // Map Coupon to CreateCouponDto for editing (using CreateDto as a temporary holder or map back)
+        // Since UpdateDto has nullables, it's tricky to bind directly to form unless we handle that.
+        // Simplified approach: Bind to CreateDto-like structure, validation rules might be slightly different for Update
+        // but for this UI we can reuse fields.
+        
+        editingCoupon = new CreateCouponDto
+        {
+            Code = coupon.Code,
+            DiscountType = coupon.DiscountType,
+            Value = coupon.Value,
+            MinPurchaseAmount = coupon.MinPurchaseAmount,
+            StartDate = coupon.StartDate,
+            EndDate = coupon.EndDate,
+            IsRecurring = coupon.IsRecurring,
+            MaxUsesGlobal = coupon.MaxUsesGlobal,
+            MaxUsesPerUser = coupon.MaxUsesPerUser,
+            IsActive = coupon.IsActive
+        };
+        isEditing = true;
+        showEditor = true;
+    }
+
+    private async Task SaveCoupon()
+    {
+        try
+        {
+            if (isEditing)
+            {
+                var updateDto = new UpdateCouponDto
+                {
+                    DiscountType = editingCoupon.DiscountType,
+                    Value = editingCoupon.Value,
+                    MinPurchaseAmount = editingCoupon.MinPurchaseAmount,
+                    StartDate = editingCoupon.StartDate,
+                    EndDate = editingCoupon.EndDate,
+                    IsRecurring = editingCoupon.IsRecurring,
+                    MaxUsesGlobal = editingCoupon.MaxUsesGlobal,
+                    MaxUsesPerUser = editingCoupon.MaxUsesPerUser,
+                    IsActive = editingCoupon.IsActive
+                };
+                await CouponService.UpdateCoupon(editingCoupon.Code, updateDto);
+            }
+            else
+            {
+                await CouponService.CreateCoupon(editingCoupon);
+            }
+
+            showEditor = false;
+            await LoadCoupons();
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine(ex.Message);
+            // Show toast or alert
+        }
+    }
+
+    private void Delete(string code)
+    {
+        couponToDelete = code;
+        isDeleteModalOpen = true;
+    }
+
+    private void CloseDeleteModal()
+    {
+        isDeleteModalOpen = false;
+        couponToDelete = null;
+    }
+
+    private async Task ConfirmDeleteCoupon()
+    {
+        if (string.IsNullOrEmpty(couponToDelete)) return;
+
+        isProcessingDelete = true;
+        try
+        {
+            await CouponService.DeleteCoupon(couponToDelete);
+            await LoadCoupons();
+            CloseDeleteModal();
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine(ex.Message);
+            await JSRuntime.InvokeVoidAsync("alert", String.Format(L.Get("Admin.Coupons.ErrorDelete"), ex.Message));
+        }
+        finally
+        {
+            isProcessingDelete = false;
+        }
+    }
+
+    private void CloseEditor()
+    {
+        showEditor = false;
+    }
+
+    private static string DiscountTypeLabel(string? type) => type switch
+    {
+        "Percentage" => "Percentual",
+        "FixedAmount" => "Valor fixo",
+        _ => type ?? "Desconto"
+    };
+}
+

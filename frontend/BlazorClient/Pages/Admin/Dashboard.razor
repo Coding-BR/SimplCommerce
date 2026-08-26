@@ -1,0 +1,190 @@
+@page "/admin"
+@using BlazorClient.Core.Interfaces
+@using BlazorClient.Models
+@using Microsoft.AspNetCore.Authorization
+@attribute [Authorize(Roles = "Admin")]
+@inject IOrderService OrderService
+@inject NavigationManager Navigation
+@inject ILocalizationService L
+
+<PageTitle>Painel administrativo | IdealCreative</PageTitle>
+
+<MudContainer MaxWidth="MaxWidth.ExtraLarge" Class="admin-dashboard py-6 py-lg-8">
+    <section class="ic-admin-command-hero mb-6">
+        <div class="ic-admin-command-copy">
+            <span class="ic-admin-command-label"><MudIcon Icon="@Icons.Material.Outlined.AutoAwesome" Size="Size.Small" /> CENTRAL IDEALCREATIVE</span>
+            <MudText Typo="Typo.h3">Sua operação, em um só lugar.</MudText>
+            <MudText Typo="Typo.body1">Produtos, pedidos, clientes e receita organizados para você decidir com rapidez.</MudText>
+            <div class="ic-admin-command-actions">
+                <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Outlined.AddBox" Href="/admin/products/new">Cadastrar produto</MudButton>
+                <MudButton Variant="Variant.Outlined" StartIcon="@Icons.Material.Outlined.ReceiptLong" Href="/admin/orders">Ver pedidos</MudButton>
+            </div>
+        </div>
+        <div class="ic-admin-command-status">
+            <span class="ic-admin-live"><i></i> LOJA ONLINE</span>
+            <strong>@DateTime.Now.ToString("dddd", new System.Globalization.CultureInfo("pt-BR"))</strong>
+            <small>@DateTime.Now.ToString("dd 'de' MMMM · HH:mm", new System.Globalization.CultureInfo("pt-BR"))</small>
+            <div class="ic-admin-command-orbit"><MudIcon Icon="@Icons.Material.Outlined.Storefront" /></div>
+        </div>
+    </section>
+
+    @if (isLoading)
+    {
+        <MudGrid Spacing="3">
+            @for (var index = 0; index < 4; index++)
+            {
+                <MudItem xs="12" sm="6" lg="3"><MudSkeleton SkeletonType="SkeletonType.Rectangle" Height="148px" Class="rounded-xl" /></MudItem>
+            }
+        </MudGrid>
+    }
+    else
+    {
+        <MudGrid Spacing="3" Class="mb-6">
+            @foreach (var card in StatCards)
+            {
+                <MudItem xs="12" sm="6" lg="3">
+                    <MudPaper Class="stat-card pa-5 h-100 rounded-xl" Elevation="0">
+                        <div class="d-flex align-center justify-space-between mb-5">
+                            <div class="stat-icon"><MudIcon Icon="@card.Icon" /></div>
+                            <MudIcon Icon="@Icons.Material.Filled.NorthEast" Size="Size.Small" Class="text-muted" />
+                        </div>
+                        <MudText Typo="Typo.h4" Class="fw-bold">@card.Value</MudText>
+                        <MudText Typo="Typo.body2" Class="text-muted">@card.Label</MudText>
+                        <small class="stat-footnote">Visão acumulada da loja</small>
+                    </MudPaper>
+                </MudItem>
+            }
+        </MudGrid>
+
+        <MudGrid Spacing="3">
+            <MudItem xs="12" lg="8">
+                <MudPaper Class="dashboard-panel rounded-xl" Elevation="0">
+                    <div class="panel-heading pa-5 d-flex align-center justify-space-between">
+                        <div>
+                            <MudText Typo="Typo.h6" Class="fw-bold">Pedidos recentes</MudText>
+                            <MudText Typo="Typo.body2" Class="text-muted">Últimas movimentações cadastradas</MudText>
+                        </div>
+                        <MudButton Variant="Variant.Text" Color="Color.Primary" EndIcon="@Icons.Material.Filled.ArrowForward" Href="/admin/orders">Ver todos</MudButton>
+                    </div>
+                    <MudDivider />
+                    @if (recentOrders.Count == 0)
+                    {
+                        <div class="empty-panel pa-10 text-center">
+                            <MudIcon Icon="@Icons.Material.Outlined.ReceiptLong" Size="Size.Large" Class="text-muted mb-3" />
+                            <MudText Typo="Typo.h6">Nenhum pedido ainda</MudText>
+                            <MudText Typo="Typo.body2" Class="text-muted">Os novos pedidos aparecerão aqui.</MudText>
+                        </div>
+                    }
+                    else
+                    {
+                        <div class="table-responsive">
+                            <table class="table align-middle mb-0 dashboard-table">
+                                <thead><tr><th>Pedido</th><th>Cliente</th><th>Data</th><th>Status</th><th class="text-end">Total</th></tr></thead>
+                                <tbody>
+                                    @foreach (var order in recentOrders)
+                                    {
+                                        <tr @onclick="() => OpenOrder(order.Id)">
+                                            <td class="fw-bold">#@ShortId(order.Id)</td>
+                                            <td>@(order.CustomerName ?? order.CustomerEmail ?? "Cliente")</td>
+                                            <td>@order.CreatedAt?.ToLocalTime().ToString("dd/MM/yyyy HH:mm")</td>
+                                            <td><MudChip T="string" Size="Size.Small" Color="@StatusColor(order.Status)" Variant="Variant.Outlined">@StatusLabel(order.Status)</MudChip></td>
+                                            <td class="text-end fw-bold">@L.FormatCurrency((decimal)order.Total)</td>
+                                        </tr>
+                                    }
+                                </tbody>
+                            </table>
+                        </div>
+                    }
+                </MudPaper>
+            </MudItem>
+
+            <MudItem xs="12" lg="4">
+                <MudPaper Class="dashboard-panel rounded-xl pa-5 h-100" Elevation="0">
+                    <span class="ic-admin-kicker">ATALHOS</span>
+                    <MudText Typo="Typo.h6" Class="fw-bold mt-1">Ações rápidas</MudText>
+                    <MudText Typo="Typo.body2" Class="text-muted mb-5">Tarefas frequentes da sua operação.</MudText>
+                    <div class="quick-actions">
+                        @foreach (var action in QuickActions)
+                        {
+                            <button type="button" class="quick-action" @onclick="() => Navigation.NavigateTo(action.Url)">
+                                <span class="quick-action-icon"><MudIcon Icon="@action.Icon" /></span>
+                                <span><strong>@action.Title</strong><small>@action.Description</small></span>
+                                <MudIcon Icon="@Icons.Material.Filled.ChevronRight" Size="Size.Small" />
+                            </button>
+                        }
+                    </div>
+                </MudPaper>
+            </MudItem>
+        </MudGrid>
+    }
+</MudContainer>
+
+@code {
+    private DashboardStats stats = new();
+    private List<Order> recentOrders = [];
+    private bool isLoading = true;
+
+    private IEnumerable<(string Label, string Value, string Icon)> StatCards =>
+    [
+        ("Produtos cadastrados", stats.TotalProducts.ToString("N0"), Icons.Material.Outlined.Inventory2),
+        ("Pedidos", stats.TotalOrders.ToString("N0"), Icons.Material.Outlined.ReceiptLong),
+        ("Clientes", stats.TotalUsers.ToString("N0"), Icons.Material.Outlined.Group),
+        ("Receita confirmada", L.FormatCurrency(stats.TotalSales), Icons.Material.Outlined.Payments)
+    ];
+
+    private readonly (string Title, string Description, string Url, string Icon)[] QuickActions =
+    [
+        ("Cadastrar produto", "Fotos, estoque e arquivo digital", "/admin/products/new", Icons.Material.Outlined.AddBox),
+        ("Compra manual", "Escolha um cliente e registre a venda", "/admin/users", Icons.Material.Outlined.PointOfSale),
+        ("Gerenciar cupons", "Crie e acompanhe descontos", "/admin/coupons", Icons.Material.Outlined.LocalOffer),
+        ("Mídia e arquivos", "Acesse o armazenamento da loja", "/admin/files", Icons.Material.Outlined.Cloud)
+    ];
+
+    protected override async Task OnInitializedAsync()
+    {
+        var statsTask = OrderService.GetDashboardStatsAsync();
+        var ordersTask = OrderService.GetAdminOrders(1, 6);
+        await Task.WhenAll(statsTask, ordersTask);
+        stats = await statsTask ?? new DashboardStats();
+        recentOrders = (await ordersTask).Items;
+        isLoading = false;
+    }
+
+    private static string ShortId(string id) => id[..Math.Min(8, id.Length)].ToUpperInvariant();
+    private void OpenOrder(string id) => Navigation.NavigateTo($"/admin/orders?order={id}");
+    private static Color StatusColor(string? status) => status?.ToLowerInvariant() switch
+    {
+        "paid" or "delivered" => Color.Success,
+        "processing" or "shipped" => Color.Info,
+        "cancelled" => Color.Error,
+        _ => Color.Warning
+    };
+    private static string StatusLabel(string? status) => status?.ToLowerInvariant() switch
+    {
+        "pending" => "Pendente",
+        "awaitingpayment" => "Aguardando pagamento",
+        "paid" => "Pago",
+        "processing" => "Em produção",
+        "shipped" => "Enviado",
+        "delivered" => "Concluído",
+        "cancelled" => "Cancelado",
+        _ => status ?? "Pendente"
+    };
+}
+
+<style>
+    .admin-dashboard { color: var(--mud-palette-text-primary); }
+    .dashboard-heading { display: flex; align-items: flex-end; justify-content: space-between; gap: 1.5rem; }
+    .stat-card, .dashboard-panel { background: var(--mud-palette-surface); border: 1px solid var(--mud-palette-lines-default); box-shadow: 0 14px 35px rgba(21, 33, 48, .06); }
+    .stat-icon, .quick-action-icon { width: 46px; height: 46px; display: grid; place-items: center; border-radius: 14px; color: var(--mud-palette-primary); background: color-mix(in srgb, var(--mud-palette-primary) 11%, transparent); }
+    .dashboard-table th { padding: 1rem 1.25rem; color: var(--mud-palette-text-secondary); font-size: .75rem; text-transform: uppercase; letter-spacing: .06em; border: 0; }
+    .dashboard-table td { padding: 1rem 1.25rem; border-top: 1px solid var(--mud-palette-lines-default); }
+    .dashboard-table tbody tr { cursor: pointer; transition: background .18s ease; }
+    .dashboard-table tbody tr:hover { background: color-mix(in srgb, var(--mud-palette-primary) 5%, transparent); }
+    .quick-actions { display: grid; gap: .75rem; }
+    .quick-action { width: 100%; display: grid; grid-template-columns: auto 1fr auto; align-items: center; gap: .9rem; padding: .85rem; border: 1px solid var(--mud-palette-lines-default); border-radius: 16px; background: transparent; color: inherit; text-align: left; transition: .18s ease; }
+    .quick-action:hover { border-color: var(--mud-palette-primary); transform: translateX(3px); background: color-mix(in srgb, var(--mud-palette-primary) 5%, transparent); }
+    .quick-action strong, .quick-action small { display: block; }
+    .quick-action small { color: var(--mud-palette-text-secondary); margin-top: .15rem; }
+    @@media (max-width: 600px) { .dashboard-heading { align-items: stretch; flex-direction: column; } .dashboard-heading .mud-button-root { width: 100%; } }
+</style>

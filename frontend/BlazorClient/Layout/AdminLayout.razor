@@ -1,0 +1,158 @@
+@inherits LayoutComponentBase
+@implements IDisposable
+@using BlazorClient.Core.Services
+@using Microsoft.AspNetCore.Components.Routing
+@inject NavigationManager Navigation
+@inject ILocalizationService L
+@inject IJSRuntime JSRuntime
+
+@if (isCheckingAccess)
+{
+    <div class="d-flex justify-center align-center" style="height: 100vh;">
+        <MudProgressCircular Indeterminate="true" Color="Color.Primary" />
+    </div>
+}
+else if (isAdmin)
+{
+        <MudLayout Class="ic-admin-shell">
+            <MudAppBar Class="ic-admin-appbar" Elevation="0" Color="Color.Surface" Fixed="true">
+                <MudIconButton Class="ic-admin-menu-trigger" Icon="@Icons.Material.Filled.Menu" Color="Color.Inherit" Edge="Edge.Start" OnClick="@((e) => DrawerToggle())" aria-label="Abrir navegação" />
+                <div class="ic-admin-appbar-title">
+                    <span>Central de gestão</span>
+                    <div><small>Painel</small><i>/</i><strong>@CurrentSection</strong></div>
+                </div>
+                <MudSpacer />
+                <div class="ic-admin-date"><MudIcon Icon="@Icons.Material.Outlined.CalendarToday" Size="Size.Small" /><span>@DateTime.Now.ToString("dd MMM, yyyy", new System.Globalization.CultureInfo("pt-BR"))</span></div>
+                <MudButton Href="/admin/products/new" Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Outlined.Add" Class="ic-admin-top-action">Novo produto</MudButton>
+                <MudButton Href="/" Variant="Variant.Text" Color="Color.Primary" StartIcon="@Icons.Material.Outlined.Storefront" Class="ic-admin-store-link">Ver loja</MudButton>
+                <MudMenu Icon="@Icons.Material.Filled.AccountCircle" Color="Color.Inherit" AnchorOrigin="Origin.BottomRight" TransformOrigin="Origin.TopRight" Class="ic-admin-account-menu">
+                    <MudMenuItem Disabled="true">@adminDisplayName</MudMenuItem>
+                    <MudDivider />
+                    <MudMenuItem OnClick="Logout" Icon="@Icons.Material.Filled.Logout">@L.Get("Admin.Sidebar.Logout")</MudMenuItem>
+                </MudMenu>
+            </MudAppBar>
+
+            <MudDrawer Class="ic-admin-drawer" @bind-Open="_drawerOpen" ClipMode="DrawerClipMode.Never" Elevation="0" Breakpoint="Breakpoint.Md">
+                 <div class="ic-admin-brand">
+                    <a href="/admin" class="ic-admin-brand-link" aria-label="IdealCreative Admin">
+                        <span class="ic-admin-brand-mark">i</span>
+                        <span><strong>ideal</strong>creative<small>PAINEL DA LOJA</small></span>
+                    </a>
+                 </div>
+                 <div class="ic-admin-nav-label">Visão geral</div>
+                 <MudNavMenu Class="pt-2">
+                    <MudNavLink Href="/admin" Match="NavLinkMatch.All" Icon="@Icons.Material.Outlined.SpaceDashboard">Dashboard</MudNavLink>
+                    <div class="ic-admin-nav-label ic-admin-nav-label-spaced">Operação da loja</div>
+                    <MudNavLink Href="/admin/products" Match="NavLinkMatch.Prefix" Icon="@Icons.Material.Filled.Inventory2">@L.Get("Admin.Sidebar.Products")</MudNavLink>
+                    <MudNavLink Href="/admin/orders" Match="NavLinkMatch.Prefix" Icon="@Icons.Material.Filled.ShoppingCart">@L.Get("Admin.Sidebar.Orders")</MudNavLink>
+                    <MudNavLink Href="/admin/users" Match="NavLinkMatch.Prefix" Icon="@Icons.Material.Filled.People">Clientes</MudNavLink>
+                    <div class="ic-admin-nav-label ic-admin-nav-label-spaced">Conteúdo e promoção</div>
+                    <MudNavLink Href="/admin/files" Match="NavLinkMatch.Prefix" Icon="@Icons.Material.Filled.Cloud">Arquivos</MudNavLink>
+                    <MudNavLink Href="/admin/reviews" Match="NavLinkMatch.Prefix" Icon="@Icons.Material.Filled.Star">@L.Get("Admin.Sidebar.Reviews")</MudNavLink>
+                    <MudNavLink Href="/admin/coupons" Match="NavLinkMatch.Prefix" Icon="@Icons.Material.Filled.LocalOffer">@L.Get("Admin.Sidebar.Coupons")</MudNavLink>
+                    <div class="ic-admin-nav-label ic-admin-nav-label-spaced">Sistema</div>
+                    <MudNavLink Href="/admin/settings" Match="NavLinkMatch.Prefix" Icon="@Icons.Material.Filled.Settings">@L.Get("Admin.Sidebar.Settings")</MudNavLink>
+                 </MudNavMenu>
+                 <div class="ic-admin-drawer-footer">
+                    <div class="ic-admin-profile-card">
+                        <span class="ic-admin-avatar">@AdminInitials</span>
+                        <span><strong>@adminDisplayName</strong><small>Administrador</small></span>
+                    </div>
+                    <div class="ic-admin-system-state"><span class="ic-admin-status-dot"></span> Todos os serviços operacionais</div>
+                 </div>
+            </MudDrawer>
+
+            <MudMainContent Class="ic-admin-content">
+                <MudContainer MaxWidth="MaxWidth.False" Class="mt-6 mb-8">
+                    @Body
+                </MudContainer>
+            </MudMainContent>
+        </MudLayout>
+}
+else
+{
+        <div class="d-flex justify-center align-center" style="height: 100vh;">
+            <MudPaper Class="pa-8 d-flex flex-column align-center gap-4" Elevation="4">
+                <MudIcon Icon="@Icons.Material.Filled.Lock" Size="Size.Large" Color="Color.Error" />
+                <MudText Typo="Typo.h5">@L.Get("Admin.Sidebar.AccessDenied")</MudText>
+                <MudText Typo="Typo.body1">@L.Get("Admin.Sidebar.AccessDeniedMessage")</MudText>
+                <MudButton Variant="Variant.Filled" Color="Color.Primary" Href="/">@L.Get("Admin.Sidebar.BackToShop")</MudButton>
+            </MudPaper>
+        </div>
+}
+
+@code {
+    [Inject] private IAuthService AuthService { get; set; } = default!;
+    [Inject] private AuthenticationStateProvider AuthStateProvider { get; set; } = default!;
+    [Inject] private NavigationManager Nav { get; set; } = default!;
+
+    private bool _drawerOpen = true;
+    private bool isCheckingAccess = true;
+    private bool isAdmin;
+    private string adminDisplayName = "Administrador";
+    private string AdminInitials
+    {
+        get
+        {
+            var parts = adminDisplayName.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+            if (parts.Length == 0) return "AD";
+            return string.Concat(parts.Take(2).Select(part => char.ToUpperInvariant(part[0])));
+        }
+    }
+    private string CurrentSection
+    {
+        get
+        {
+            var path = new Uri(Navigation.Uri).AbsolutePath.ToLowerInvariant();
+            if (path.StartsWith("/admin/products")) return "Produtos";
+            if (path.StartsWith("/admin/orders")) return "Pedidos";
+            if (path.StartsWith("/admin/users")) return "Clientes";
+            if (path.StartsWith("/admin/reviews")) return "Avaliações";
+            if (path.StartsWith("/admin/coupons")) return "Cupons";
+            if (path.StartsWith("/admin/files")) return "Arquivos";
+            if (path.StartsWith("/admin/settings")) return "Configurações";
+            return "Visão geral";
+        }
+    }
+
+    protected override async Task OnInitializedAsync()
+    {
+        Navigation.LocationChanged += HandleLocationChanged;
+        var user = await AuthService.GetCurrentUser();
+        isAdmin = user?.IsAdmin == true;
+        adminDisplayName = user?.DisplayName ?? user?.Email ?? adminDisplayName;
+        isCheckingAccess = false;
+    }
+
+    private void DrawerToggle()
+    {
+        _drawerOpen = !_drawerOpen;
+    }
+
+    private async void HandleLocationChanged(object? sender, LocationChangedEventArgs args)
+    {
+        try
+        {
+            var isMobile = await JSRuntime.InvokeAsync<bool>("eval", "window.matchMedia('(max-width: 959.98px)').matches");
+            if (!isMobile) return;
+            await InvokeAsync(() =>
+            {
+                _drawerOpen = false;
+                StateHasChanged();
+            });
+        }
+        catch (JSDisconnectedException)
+        {
+            // A página foi encerrada antes da consulta de viewport terminar.
+        }
+    }
+
+    public void Dispose() => Navigation.LocationChanged -= HandleLocationChanged;
+
+    private async Task Logout()
+    {
+        await AuthService.SignOut();
+        await ((CustomAuthenticationStateProvider)AuthStateProvider).RefreshAuthenticationState();
+        Nav.NavigateTo("/", true);
+    }
+}

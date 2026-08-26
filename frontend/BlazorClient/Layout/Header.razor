@@ -1,0 +1,96 @@
+@using BlazorClient.Core.Services
+@using BlazorClient.Shared
+@using BlazorClient.Models
+@inject NavigationManager Navigation
+@inject ICartService CartService
+@inject ILocalizationService L
+@implements IDisposable
+
+<header class="ic-store-header">
+    @if (ShowAnnouncement)
+    {
+        <div class="ic-announcement">
+            <div class="ic-header-width">
+                <span class="ic-announcement-message">@(Settings?.TopBarMessage ?? "Compra segura e atendimento próximo")</span>
+                <div class="ic-announcement-contact">
+                    @if (!string.IsNullOrWhiteSpace(Settings?.Contact?.Hotline))
+                    {
+                        <a href="tel:@Settings.Contact.Hotline"><i class="icon-phone"></i>@Settings.Contact.Hotline</a>
+                    }
+                    @if (!string.IsNullOrWhiteSpace(Settings?.Contact?.Email))
+                    {
+                        <a href="mailto:@Settings.Contact.Email"><i class="icon-envelope-letter"></i>@Settings.Contact.Email</a>
+                    }
+                </div>
+            </div>
+        </div>
+    }
+
+    <div class="ic-primary-header">
+        <div class="ic-header-width ic-primary-header-inner">
+            <a class="ic-brand" href="/" aria-label="IdealCreative — página inicial">
+                @if (!string.IsNullOrWhiteSpace(Settings?.LogoUrl))
+                {
+                    <img src="@Settings.LogoUrl" alt="IdealCreative" width="176" height="44" />
+                }
+                else
+                {
+                    <span class="ic-brand-symbol">i</span>
+                    <span class="ic-brand-name"><strong>ideal</strong>creative<small>LOJA AUTORAL</small></span>
+                }
+            </a>
+
+            <nav class="ic-desktop-nav" aria-label="Navegação principal">
+                <a href="/" class="@ActiveClass("/")">Início</a>
+                <a href="/shop" class="@ActiveClass("/shop")">Produtos</a>
+                <a href="/cupons" class="@ActiveClass("/cupons")">Cupons</a>
+            </nav>
+
+            <div class="ic-header-actions">
+                <div class="ic-desktop-account"><LoginButton /></div>
+                <a href="/cart" class="ic-cart-action @ActiveClass("/cart")" aria-label="Carrinho com @_cartCount item(ns)">
+                    <i class="icon-basket-loaded" aria-hidden="true"></i>
+                    <span class="ic-cart-copy"><small>Seu carrinho</small><strong>@CartLabel</strong></span>
+                    @if (_cartCount > 0) { <span class="ic-cart-count">@_cartCount</span> }
+                </a>
+            </div>
+        </div>
+    </div>
+</header>
+
+<nav class="ic-mobile-nav" aria-label="Navegação principal móvel">
+    <a href="/" class="@ActiveClass("/")"><i class="icon-home"></i><span>Início</span></a>
+    <a href="/shop" class="@ActiveClass("/shop")"><i class="icon-bag"></i><span>Produtos</span></a>
+    <a href="/cart" class="ic-mobile-cart @ActiveClass("/cart")"><i class="icon-basket-loaded"></i>@if (_cartCount > 0) { <b>@_cartCount</b> }<span>Carrinho</span></a>
+    <a href="/my-account" class="@ActiveClass("/my-account")"><i class="icon-user"></i><span>Conta</span></a>
+</nav>
+
+@code {
+    [Parameter] public SiteSettings? Settings { get; set; }
+    private int _cartCount;
+    private bool ShowAnnouncement => !string.IsNullOrWhiteSpace(Settings?.TopBarMessage) ||
+        !string.IsNullOrWhiteSpace(Settings?.Contact?.Hotline) || !string.IsNullOrWhiteSpace(Settings?.Contact?.Email);
+    private string CartLabel => _cartCount == 0 ? "Vazio" : $"{_cartCount} item{(_cartCount == 1 ? "" : "s")}";
+
+    protected override async Task OnInitializedAsync()
+    {
+        CartService.OnChange += UpdateCartCount;
+        _cartCount = await CartService.GetCartItemCount();
+    }
+
+    private string ActiveClass(string path)
+    {
+        var current = new Uri(Navigation.Uri).AbsolutePath.TrimEnd('/');
+        var target = path.TrimEnd('/');
+        if (string.IsNullOrEmpty(target)) return string.IsNullOrEmpty(current) ? "active" : string.Empty;
+        return current.Equals(target, StringComparison.OrdinalIgnoreCase) || current.StartsWith(target + "/", StringComparison.OrdinalIgnoreCase) ? "active" : string.Empty;
+    }
+
+    private async void UpdateCartCount()
+    {
+        _cartCount = await CartService.GetCartItemCount();
+        await InvokeAsync(StateHasChanged);
+    }
+
+    public void Dispose() => CartService.OnChange -= UpdateCartCount;
+}

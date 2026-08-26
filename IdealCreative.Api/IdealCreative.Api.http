@@ -1,0 +1,6 @@
+@IdealCreative.Api_HostAddress = http://localhost:5179
+
+GET {{IdealCreative.Api_HostAddress}}/weatherforecast/
+Accept: application/json
+
+###

@@ -1,0 +1,167 @@
+@using BlazorClient.Models
+@using BlazorClient.Core.Services
+@inject IProductService ProductService
+@inject NavigationManager Navigation
+@inject ILocalizationService L
+
+<div class="ram-search-container">
+    <div class="search-input-wrapper">
+        <input @bind="SearchTerm" 
+               @bind:event="oninput" 
+               placeholder="@L.Get("Shop.InstantSearchPlaceholder")" 
+               class="ram-search-input" />
+        
+        @if (IsLoading)
+        {
+            <span class="loading-indicator">⚡</span>
+        }
+    </div>
+</div>
+
+<style>
+    .ram-search-container {
+        position: relative;
+        width: 100%;
+        max-width: 400px;
+        margin-bottom: 20px;
+    }
+    .search-input-wrapper {
+        position: relative;
+    }
+    .ram-search-input {
+        width: 100%;
+        padding: 10px 15px;
+        border: 2px solid #e0e0e0;
+        border-radius: 8px;
+        font-size: 1rem;
+        transition: border-color 0.2s;
+    }
+    .ram-search-input:focus {
+        border-color: #6200ea;
+        outline: none;
+    }
+    .loading-indicator {
+        position: absolute;
+        right: 10px;
+        top: 50%;
+        transform: translateY(-50%);
+        font-size: 0.8rem;
+        color: #666;
+    }
+</style>
+
+@code {
+    private List<ProductSearchIndexDto> _allProducts = new();
+    private List<ProductSearchIndexDto> FilteredProducts = new();
+    private string _searchTerm = "";
+    private bool IsLoading = true;
+
+    [Parameter] public string? InitialTerm { get; set; }
+    
+    // Explicit Parameters from parent (Shop.razor)
+    [Parameter] public decimal? MinPrice { get; set; }
+    [Parameter] public decimal? MaxPrice { get; set; }
+    [Parameter] public string? CategoryId { get; set; }
+    
+    [Parameter] public string? Language { get; set; }
+    
+    private string? _lastLanguage;
+
+    // Event to notify parent (Shop.razor)
+    [Parameter] public EventCallback<List<ProductSearchIndexDto>?> OnSearch { get; set; }
+
+    public string SearchTerm
+    {
+        get => _searchTerm;
+        set
+        {
+            _searchTerm = value;
+            _ = Filter();
+        }
+    }
+
+    protected override async Task OnInitializedAsync()
+    {
+        _lastLanguage = Language;
+        await LoadIndex();
+        
+        if (!string.IsNullOrEmpty(InitialTerm))
+        {
+            _searchTerm = InitialTerm;
+            await Filter();
+        }
+    }
+
+    private async Task LoadIndex()
+    {
+        IsLoading = true;
+        StateHasChanged();
+        _allProducts = await ProductService.GetSearchIndexAsync(language: Language); 
+        IsLoading = false;
+        StateHasChanged();
+    }
+
+    protected override async Task OnParametersSetAsync()
+    {
+        if (Language != _lastLanguage)
+        {
+            _lastLanguage = Language;
+            await LoadIndex();
+        }
+        
+        // Re-filter if parent updates Min/Max price or language
+        await Filter();
+    }
+
+    private async Task Filter()
+    {
+        // Check if filters are active
+        bool hasFilters = !string.IsNullOrWhiteSpace(_searchTerm) || MinPrice.HasValue || MaxPrice.HasValue || !string.IsNullOrEmpty(CategoryId);
+
+        if (!hasFilters)
+        {
+            // Reset parent to default view
+            await OnSearch.InvokeAsync(null);
+            return;
+        }
+
+        var query = _allProducts.AsEnumerable();
+
+        if (!string.IsNullOrWhiteSpace(_searchTerm))
+        {
+            var term = _searchTerm.Trim().ToLowerInvariant();
+            query = query.Where(p => 
+                (!string.IsNullOrEmpty(p.Keywords) && p.Keywords.Contains(term)) ||
+                (p.Title != null && p.Title.Contains(term, StringComparison.InvariantCultureIgnoreCase))
+            );
+        }
+
+        if (MinPrice.HasValue)
+        {
+            query = query.Where(p => p.Price >= MinPrice.Value);
+        }
+
+        if (MaxPrice.HasValue)
+        {
+            query = query.Where(p => p.Price <= MaxPrice.Value);
+        }
+
+        if (!string.IsNullOrEmpty(CategoryId))
+        {
+            if (CategoryId.StartsWith("virtual_"))
+            {
+                var catName = CategoryId.Substring("virtual_".Length);
+                query = query.Where(p => p.CategoryName == catName || p.CategoryId == CategoryId);
+            }
+            else
+            {
+                query = query.Where(p => p.CategoryId == CategoryId);
+            }
+        }
+
+        FilteredProducts = query.ToList();
+        
+        // Send results to parent
+        await OnSearch.InvokeAsync(FilteredProducts);
+    }
+}

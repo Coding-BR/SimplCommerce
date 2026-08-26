@@ -1,0 +1,386 @@
+@using BlazorClient.Models
+@using System.Globalization
+@using Microsoft.AspNetCore.Components.Authorization
+@using System.Security.Claims
+@using BlazorClient.Core.Services
+@inject HttpClient Http
+@inject IHttpClientFactory ClientFactory
+@inject ISnackbar Snackbar
+@inject AuthenticationStateProvider AuthStateProvider
+@inject NavigationManager Navigation
+@inject ILocalizationService L
+
+<MudCard Elevation="0" Class="ynex-premium-panel rounded-2xl border mt-6">
+    <MudCardHeader>
+        <CardHeaderContent>
+            <div class="d-flex align-center">
+                <MudIcon Icon="@Icons.Material.Filled.RateReview" Color="Color.Primary" Class="mr-3" />
+                <MudText Typo="Typo.h6" Class="fw-bold">@L.Get("Reviews.Title")</MudText>
+                @if (_reviews != null && _reviews.Count > 0)
+                {
+                    <MudChip T="string" Color="Color.Primary" Variant="Variant.Text" Size="Size.Small" Class="ml-2 fw-bold">@_reviews.Count</MudChip>
+                }
+            </div>
+        </CardHeaderContent>
+    </MudCardHeader>
+    <MudCardContent class="pa-6">
+        @if (!string.IsNullOrEmpty(_errorMessage))
+        {
+            <MudAlert Severity="Severity.Error" Variant="Variant.Filled" Class="mb-4 rounded-xl">@_errorMessage</MudAlert>
+        }
+
+        @if (_reviews == null)
+        {
+            <div class="d-flex justify-center pa-8">
+                <MudProgressCircular Color="Color.Primary" Indeterminate="true" />
+            </div>
+        }
+        else if (_reviews.Count == 0)
+        {
+            <div class="text-center pa-10 border-2 border-dashed rounded-2xl ynex-border-light">
+                <MudIcon Icon="@Icons.Material.Filled.ChatBubbleOutline" Size="Size.Large" Color="Color.Default" Class="mb-3" />
+                <MudText Typo="Typo.body1" Class="ynex-text-muted">@L.Get("Reviews.BeTheFirst")</MudText>
+            </div>
+        }
+        else
+        {
+            <div class="review-list">
+                @foreach (var review in _reviews)
+                {
+                    <div class="review-item mb-6 pa-4 rounded-2xl hover-bg-light transition-all border border-transparent hover-border-light">
+                        <div class="d-flex justify-space-between align-start mb-2 flex-wrap">
+                            <div class="d-flex align-center">
+                                <MudAvatar Color="Color.Primary" Variant="Variant.Filled" Size="Size.Medium" Class="mr-3">
+                                    @(review.UserName?.Substring(0, 1).ToUpper() ?? "U")
+                                </MudAvatar>
+                                <div>
+                                    <MudText Typo="Typo.subtitle1" Class="fw-bold mb-n1">@review.UserName</MudText>
+                                    <MudText Typo="Typo.caption" Class="ynex-text-muted">@review.CreatedAt.ToString("g")</MudText>
+                                </div>
+                            </div>
+                            <div class="text-right">
+                                <MudRating ReadOnly="true" SelectedValue="@review.Rating" Size="Size.Small" Color="Color.Warning" />
+                            </div>
+                        </div>
+                        
+                        <MudText Typo="Typo.body2" Class="review-comment mt-2 pl-12 line-height-relaxed">@review.Comment</MudText>
+
+                        @if (!string.IsNullOrWhiteSpace(review.Comment))
+                        {
+                            var translateUrl = $"https://translate.google.com/?sl=auto&tl={CultureInfo.CurrentCulture.TwoLetterISOLanguageName}&text={Uri.EscapeDataString(review.Comment)}";
+                            <div class="pl-12 mt-2">
+                                <MudLink Href="@translateUrl" Target="_blank" Underline="Underline.None" Class="d-flex align-center ynex-text-muted hover-primary" Style="font-size: 0.75rem;">
+                                    <MudIcon Icon="@Icons.Material.Filled.Translate" Size="Size.Small" Class="mr-1" />
+                                    @L.Get("Reviews.TranslateWithGoogle")
+                                </MudLink>
+                            </div>
+                        }
+                    </div>
+                }
+            </div>
+
+            @if (_hasMore)
+            {
+                <div class="d-flex justify-center mt-4">
+                    <MudButton Variant="Variant.Outlined" Color="Color.Primary" OnClick="LoadMore" Disabled="_loadingMore" EndIcon="@Icons.Material.Filled.KeyboardArrowDown" Class="rounded-xl px-6">
+                        @if (_loadingMore)
+                        {
+                            <MudProgressCircular Class="ms-n1" Size="Size.Small" Indeterminate="true"/>
+                            <MudText Class="ms-2">@L.Get("Common.Loading")</MudText>
+                        }
+                        else
+                        {
+                            <MudText>@L.Get("Reviews.LoadMore")</MudText>
+                        }
+                    </MudButton>
+                </div>
+            }
+        }
+
+        <MudDivider Class="my-8" />
+
+        <div class="write-review-section pa-6 rounded-2xl bg-light-soft">
+            <MudText Typo="Typo.h6" Class="fw-bold mb-4">@L.Get("Reviews.WriteReview")</MudText>
+            
+            @if (_isAuthenticated)
+            {
+                @if (CanReview)
+                {
+                    <MudForm @bind-IsValid="_success">
+                        <div class="mb-4">
+                            <MudText Typo="Typo.subtitle2" Class="mb-2">@L.Get("Reviews.YourRating")</MudText>
+                            <MudRating @bind-SelectedValue="_newReview.Rating" Size="Size.Medium" Color="Color.Warning" />
+                            @if (_showRatingError && _newReview.Rating == 0)
+                            {
+                                <MudText Color="Color.Error" Typo="Typo.caption" Class="d-flex align-center mt-1">
+                                    <MudIcon Icon="@Icons.Material.Filled.Error" Size="Size.Small" Class="mr-1" />
+                                    @L.Get("Reviews.SelectRatingRequired")
+                                </MudText>
+                            }
+                        </div>
+
+                        <MudTextField @bind-Value="_newReview.Comment" 
+                                     Label="@L.Get("Reviews.CommentLabel")" 
+                                     Variant="Variant.Outlined" 
+                                     Lines="4" 
+                                     Class="bg-white rounded-xl mb-4" 
+                                     Required="true" />
+                        
+                        <MudButton Variant="Variant.Filled" 
+                                   Color="Color.Primary" 
+                                   OnClick="SubmitReview" 
+                                   Disabled="@(_submitting)"
+                                   Class="rounded-xl px-8 py-2 shadow-md hover-scale"
+                                   StartIcon="@Icons.Material.Filled.Send">
+                            @if (_submitting)
+                            {
+                                <MudProgressCircular Class="ms-n1" Size="Size.Small" Indeterminate="true"/>
+                                <MudText Class="ms-2">@L.Get("Common.Submitting")</MudText>
+                            }
+                            else
+                            {
+                                <MudText>@L.Get("Reviews.SubmitButton")</MudText>
+                            }
+                        </MudButton>
+                    </MudForm>
+                }
+                else
+                {
+                    <div class="d-flex align-center pa-4 rounded-xl bg-white border border-dashed border-info">
+                        <MudIcon Icon="@Icons.Material.Filled.Info" Color="Color.Info" Class="mr-3" />
+                        <MudText Typo="Typo.body2" Class="flex-1">@L.Get("Reviews.AlreadyReviewed")</MudText>
+                    </div>
+                }
+            }
+            else
+            {
+                <div class="text-center pa-6">
+                    <MudText Typo="Typo.body1" Class="mb-4">@L.Get("Reviews.LoginToReview")</MudText>
+                    <MudButton Variant="Variant.Filled" 
+                               Color="Color.Primary" 
+                               OnClick='() => Navigation.NavigateTo($"/login?returnUrl={Uri.EscapeDataString(Navigation.Uri)}")'
+                               Class="rounded-xl px-6">
+                        @L.Get("Nav.Login")
+                    </MudButton>
+                </div>
+            }
+        </div>
+    </MudCardContent>
+</MudCard>
+
+<style>
+    .ynex-premium-panel {
+        background: var(--mud-palette-surface);
+        box-shadow: 0 0.125rem 0.25rem rgba(0, 0, 0, 0.075);
+    }
+    .bg-light-soft {
+        background-color: rgba(var(--mud-palette-primary-rgb), 0.03);
+    }
+    .hover-bg-light:hover {
+        background-color: rgba(0, 0, 0, 0.02);
+    }
+    .line-height-relaxed {
+        line-height: 1.6;
+    }
+    .review-comment {
+        white-space: pre-wrap;
+        word-break: break-word;
+        overflow-wrap: anywhere;
+    }
+    .hover-primary:hover {
+        color: var(--mud-palette-primary) !important;
+    }
+    .bg-white {
+        background-color: white !important;
+    }
+    .ynex-border-light {
+        border-color: rgba(0, 0, 0, 0.05) !important;
+    }
+</style>
+
+@implements IDisposable
+
+@code {
+    [Parameter] public string ProductId { get; set; } = default!;
+    [Parameter] public bool CanReview { get; set; }
+
+    private List<ProductReview>? _reviews;
+    private ProductReview _newReview = new ProductReview { Rating = 0 }; // Initialize to 0 to force selection
+    private bool _success;
+    private bool _submitting;
+    // private bool _isLoading; // Unused
+    private bool _loadingMore;
+
+    private bool _hasMore = true;
+    private string? _lastDocId;
+    private int _pageSize = 5;
+
+    private bool _isAuthenticated;
+    private bool _showRatingError;
+    private string? _userId;
+    private string? _userName;
+    private string? _errorMessage;
+
+    protected override async Task OnInitializedAsync()
+    {
+        L.OnLanguageChanged += HandleLanguageChanged;
+
+        var authState = await AuthStateProvider.GetAuthenticationStateAsync();
+        var user = authState.User;
+        _isAuthenticated = user.Identity?.IsAuthenticated ?? false;
+
+        if (_isAuthenticated)
+        {
+            _userId = user.FindFirst(c => c.Type == "user_id")?.Value ?? user.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+            _userName = user.Identity?.Name ?? user.FindFirst("name")?.Value ?? "Usuário";
+        }
+
+        await LoadReviews();
+    }
+
+    private void HandleLanguageChanged()
+    {
+        InvokeAsync(StateHasChanged);
+    }
+
+    public void Dispose()
+    {
+        if (L != null)
+        {
+            L.OnLanguageChanged -= HandleLanguageChanged;
+        }
+    }
+
+    private async Task LoadReviews(bool initial = true)
+    {
+        if (initial)
+        {
+            // _isLoading = true;
+            _reviews = null;
+            _lastDocId = null;
+            _hasMore = true;
+        }
+        else
+        {
+            _loadingMore = true;
+        }
+
+        _errorMessage = null;
+        try
+        {
+            var url = $"api/reviews/{ProductId}?pageSize={_pageSize}";
+            if (!string.IsNullOrEmpty(_lastDocId))
+            {
+                url += $"&lastDocId={_lastDocId}";
+            }
+
+            Console.WriteLine($"Loading reviews: {url}");
+            var response = await Http.GetFromJsonAsync<ReviewListResponse>(url);
+            
+            if (response != null)
+            {
+                if (initial)
+                {
+                    _reviews = response.Items;
+                }
+                else
+                {
+                    _reviews ??= new List<ProductReview>();
+                    _reviews.AddRange(response.Items);
+                }
+
+                _lastDocId = response.Pagination.LastDocId;
+                _hasMore = !string.IsNullOrEmpty(_lastDocId) && response.Items.Count >= _pageSize;
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error loading reviews: {ex}");
+            _errorMessage = $"Erro ao carregar avaliações: {ex.Message}";
+            _reviews ??= new List<ProductReview>();
+        }
+        finally
+        {
+            // _isLoading = false;
+            _loadingMore = false;
+        }
+        StateHasChanged();
+    }
+
+    private async Task LoadMore()
+    {
+        await LoadReviews(initial: false);
+    }
+
+    private async Task SubmitReview()
+    {
+        _showRatingError = false;
+        
+        if (_newReview.Rating <= 0)
+        {
+            _showRatingError = true;
+            StateHasChanged();
+            return;
+        }
+
+        if (!_isAuthenticated || string.IsNullOrWhiteSpace(_newReview.Comment)) return;
+
+        _submitting = true;
+        _errorMessage = null;
+        try
+        {
+            _newReview.ProductId = ProductId;
+            // UserId/Name set by backend, but we can send them for consistency/optimistic UI
+            _newReview.UserId = _userId!;
+            _newReview.UserName = _userName!;
+            
+            // Use AuthenticatedAPI client for POST requests requiring auth
+            var authHttp = ClientFactory.CreateClient("AuthenticatedAPI");
+            var response = await authHttp.PostAsJsonAsync("api/reviews", _newReview);
+            
+            if (response.IsSuccessStatusCode)
+            {
+                Snackbar.Add("Avaliação enviada para moderação.", Severity.Success);
+                _newReview = new ProductReview { Rating = 0 }; // Reset to 0
+                CanReview = false;
+                _reviews = null; // Force reload spinner
+                await LoadReviews(); // Refresh list to see new review
+            }
+            else
+            {
+                string displayError = L.Get("Reviews.ErrorMessage");
+                try 
+                {
+                    var errorContent = await response.Content.ReadAsStringAsync();
+                    Console.WriteLine($"Submit error: {response.StatusCode} - {errorContent}");
+                    
+                    // Try to parse simple JSON error like { "error": "message" } or { "message": "..." }
+                    using var doc = System.Text.Json.JsonDocument.Parse(errorContent);
+                    if (doc.RootElement.TryGetProperty("error", out var errorProp))
+                    {
+                        displayError = errorProp.GetString() ?? displayError;
+                    }
+                    else if (doc.RootElement.TryGetProperty("message", out var msgProp))
+                    {
+                        displayError = msgProp.GetString() ?? displayError;
+                    }
+                }
+                catch 
+                {
+                    // Fallback to generic if parsing fails
+                }
+                
+                Snackbar.Add(displayError, Severity.Error);
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Submit exception: {ex}");
+            Snackbar.Add(L.Get("Reviews.ErrorMessage"), Severity.Error);
+        }
+        finally
+        {
+            _submitting = false;
+        }
+    }
+}

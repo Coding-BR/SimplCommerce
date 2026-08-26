@@ -1,0 +1,128 @@
+@* SkeletonLoader Component - Animated skeleton placeholders for loading states *@
+
+@if (Type == LoaderType.ProductCard)
+{
+    <MudCard Elevation="0" Class="ynex-product-card-premium rounded-2xl border overflow-hidden h-100">
+        <MudSkeleton SkeletonType="MudBlazor.SkeletonType.Rectangle" Height="250px" Animation="Animation.Wave" />
+        <div class="pa-4 text-center">
+            <MudSkeleton SkeletonType="MudBlazor.SkeletonType.Text" Width="80%" Height="24px" Class="mx-auto mb-2" Animation="Animation.Wave" />
+            <MudSkeleton SkeletonType="MudBlazor.SkeletonType.Text" Width="40%" Height="20px" Class="mx-auto" Animation="Animation.Wave" />
+        </div>
+    </MudCard>
+}
+else if (Type == LoaderType.ProductGrid)
+{
+    <MudGrid>
+        @for (int i = 0; i < Count; i++)
+        {
+            <MudItem xs="12" sm="6" md="@ColMd" lg="@ColLg">
+                <MudCard Elevation="0" Class="ynex-product-card-premium rounded-2xl border overflow-hidden h-100">
+                    <MudSkeleton SkeletonType="MudBlazor.SkeletonType.Rectangle" Height="250px" Animation="Animation.Wave" />
+                    <div class="pa-4 text-center">
+                        <MudSkeleton SkeletonType="MudBlazor.SkeletonType.Text" Width="80%" Height="24px" Class="mx-auto mb-2" Animation="Animation.Wave" />
+                        <MudSkeleton SkeletonType="MudBlazor.SkeletonType.Text" Width="40%" Height="20px" Class="mx-auto" Animation="Animation.Wave" />
+                    </div>
+                </MudCard>
+            </MudItem>
+        }
+    </MudGrid>
+}
+else if (Type == LoaderType.Text)
+{
+    <MudSkeleton SkeletonType="MudBlazor.SkeletonType.Text" Width="@Width" Animation="Animation.Wave" />
+}
+else if (Type == LoaderType.ListItem)
+{
+    <MudList T="string">
+        @for (int i = 0; i < Count; i++)
+        {
+            <MudListItem T="string">
+                <MudSkeleton SkeletonType="MudBlazor.SkeletonType.Text" Width="@(70 + (i * 5) % 30 + "%")" Animation="Animation.Wave" />
+            </MudListItem>
+        }
+    </MudList>
+}
+else if (Type == LoaderType.ProductDetailPage)
+{
+    <MudGrid Class="mt-8">
+        <MudItem xs="12" md="6">
+            <MudSkeleton SkeletonType="MudBlazor.SkeletonType.Rectangle" Height="450px" Class="rounded-2xl" Animation="Animation.Wave" />
+            <div class="d-flex gap-4 mt-4">
+                @for (int i = 0; i < 4; i++)
+                {
+                    <MudSkeleton SkeletonType="MudBlazor.SkeletonType.Rectangle" Height="80px" Width="80px" Class="rounded-xl" Animation="Animation.Wave" />
+                }
+            </div>
+        </MudItem>
+        <MudItem xs="12" md="6">
+            <MudSkeleton SkeletonType="MudBlazor.SkeletonType.Text" Height="48px" Width="80%" Class="mb-4" Animation="Animation.Wave" />
+            <MudSkeleton SkeletonType="MudBlazor.SkeletonType.Text" Height="36px" Width="40%" Class="mb-8" Animation="Animation.Wave" />
+            <MudSkeleton SkeletonType="MudBlazor.SkeletonType.Text" Height="20px" Width="100%" Class="mb-2" Animation="Animation.Wave" />
+            <MudSkeleton SkeletonType="MudBlazor.SkeletonType.Text" Height="20px" Width="90%" Class="mb-2" Animation="Animation.Wave" />
+            <MudSkeleton SkeletonType="MudBlazor.SkeletonType.Text" Height="20px" Width="75%" Class="mb-8" Animation="Animation.Wave" />
+            <MudSkeleton SkeletonType="MudBlazor.SkeletonType.Rectangle" Height="56px" Width="200px" Class="rounded-xl" Animation="Animation.Wave" />
+        </MudItem>
+    </MudGrid>
+}
+else if (Type == LoaderType.OrderDetail)
+{
+    <MudContainer MaxWidth="MaxWidth.Large" Class="mt-8">
+        <MudSkeleton SkeletonType="MudBlazor.SkeletonType.Text" Height="48px" Width="40%" Class="mb-8" Animation="Animation.Wave" />
+        <MudGrid>
+            <MudItem xs="12" md="8">
+                @for (int i = 0; i < 3; i++)
+                {
+                    <MudPaper Elevation="0" Class="pa-4 border rounded-xl mb-4 d-flex gap-4 align-center">
+                        <MudSkeleton SkeletonType="MudBlazor.SkeletonType.Rectangle" Height="80px" Width="80px" Class="rounded-lg" Animation="Animation.Wave" />
+                        <div class="flex-grow-1">
+                            <MudSkeleton SkeletonType="MudBlazor.SkeletonType.Text" Height="24px" Width="70%" Class="mb-2" Animation="Animation.Wave" />
+                            <MudSkeleton SkeletonType="MudBlazor.SkeletonType.Text" Height="20px" Width="40%" Animation="Animation.Wave" />
+                        </div>
+                    </MudPaper>
+                }
+            </MudItem>
+            <MudItem xs="12" md="4">
+                <MudPaper Elevation="0" Class="pa-6 border rounded-xl">
+                    <MudSkeleton SkeletonType="MudBlazor.SkeletonType.Text" Height="28px" Width="60%" Class="mb-4" Animation="Animation.Wave" />
+                    <MudSkeleton SkeletonType="MudBlazor.SkeletonType.Text" Height="20px" Width="80%" Class="mb-2" Animation="Animation.Wave" />
+                    <MudSkeleton SkeletonType="MudBlazor.SkeletonType.Text" Height="20px" Width="50%" Class="mb-2" Animation="Animation.Wave" />
+                    <MudSkeleton SkeletonType="MudBlazor.SkeletonType.Text" Height="20px" Width="70%" Animation="Animation.Wave" />
+                </MudPaper>
+            </MudItem>
+        </MudGrid>
+    </MudContainer>
+}
+else if (Type == LoaderType.AccountSection)
+{
+    <div class="pa-4">
+        @for (int i = 0; i < Count; i++)
+        {
+            <MudPaper Elevation="0" Class="pa-4 border rounded-xl mb-4 d-flex gap-4 align-center">
+                <MudSkeleton SkeletonType="MudBlazor.SkeletonType.Circle" Height="60px" Width="60px" Animation="Animation.Wave" />
+                <div class="flex-grow-1">
+                    <MudSkeleton SkeletonType="MudBlazor.SkeletonType.Text" Height="24px" Width="60%" Class="mb-2" Animation="Animation.Wave" />
+                    <MudSkeleton SkeletonType="MudBlazor.SkeletonType.Text" Height="20px" Width="40%" Animation="Animation.Wave" />
+                </div>
+            </MudPaper>
+        }
+    </div>
+}
+
+@code {
+    [Parameter] public LoaderType Type { get; set; } = LoaderType.Text;
+    [Parameter] public int Count { get; set; } = 4;
+    [Parameter] public string Width { get; set; } = "100%";
+    [Parameter] public int ColLg { get; set; } = 3;
+    [Parameter] public int ColMd { get; set; } = 4;
+
+    public enum LoaderType
+    {
+        Text,
+        ProductCard,
+        ProductGrid,
+        ListItem,
+        ProductDetailPage,
+        OrderDetail,
+        AccountSection
+    }
+}

@@ -1,0 +1,951 @@
+@page "/product/{id}"
+@page "/produto/{id}"
+@using BlazorClient.Models
+@using BlazorClient.Core.Services
+@inject IProductService ProductService
+@inject NavigationManager Navigation
+@inject IJSRuntime JSRuntime
+@inject IOrderService OrderService
+@inject IUserService UserService
+@inject AuthenticationStateProvider AuthStateProvider
+@inject IClientLocaleService LocaleService
+@inject ILocalizationService L
+@using Microsoft.AspNetCore.Components.Authorization
+@implements IDisposable
+
+
+@if (isLoading)
+{
+    <BlazorClient.Components.SkeletonLoader Type="BlazorClient.Components.SkeletonLoader.LoaderType.ProductDetailPage" />
+}
+else if (!string.IsNullOrEmpty(errorMessage))
+{
+    <MudContainer MaxWidth="MaxWidth.Large" Class="mt-16 mb-16">
+        <MudAlert Severity="Severity.Error" Variant="Variant.Filled" Class="rounded-xl pa-8 shadow-lg">
+            <MudText Typo="Typo.h5" Class="fw-bold mb-2">@L.Get("ProductDetails.ErrorLoading")</MudText>
+            <MudText Typo="Typo.body1" Class="mb-6">@errorMessage</MudText>
+            <MudButton Variant="Variant.Filled" Color="Color.Surface" OnClick="LoadProduct" StartIcon="@Icons.Material.Filled.Refresh" Class="rounded-lg px-8 py-3">
+                @L.Get("Common.TryAgain")
+            </MudButton>
+        </MudAlert>
+    </MudContainer>
+}
+else if (product != null)
+{
+    <MudContainer MaxWidth="MaxWidth.ExtraLarge" Class="mt-8 mb-16 ynex-product-details">
+        
+        <div class="mb-6">
+            <MudBreadcrumbs Items="_breadcrumbs" Class="pa-0 ynex-breadcrumbs" />
+        </div>
+
+        <MudGrid Spacing="8">
+            <!-- Product Images (Left Column) -->
+            <MudItem xs="12" md="7">
+                <div class="d-flex flex-column gap-4">
+                    <!-- Main Image using Aspect Ratio constraint for consistency -->
+                    <!-- Main Image - Standardized with ProductCard approach but auto height for tight frame -->
+                    <div class="product-image-wrapper ic-product-gallery position-relative overflow-hidden bg-white">
+                        @{
+                            var mainImageUrl = GetMainImageUrl();
+                        }
+                        <img src="@mainImageUrl" alt="@product.Title" class="ic-product-main-image" width="900" height="900" loading="eager" fetchpriority="high" decoding="async" />
+                        
+                        <!-- Badges - Using standard overlay class -->
+                        <div class="product-badges-overlay pa-3" style="position: absolute; top: 0; left: 0; width: 100%; pointer-events: none;">
+                            <div class="d-flex flex-column gap-2 align-start">
+                                @if (product.IsDigital)
+                                {
+                                    <MudChip T="string" Color="Color.Success" Variant="Variant.Filled" Size="Size.Small" Class="fw-bold shadow-sm">@L.Get("Product.Digital")</MudChip>
+                                }
+                                @if (!product.IsDigital)
+                                {
+                                    <MudChip T="string" Color="Color.Success" Variant="Variant.Filled" Size="Size.Small" Class="fw-bold rounded-lg shadow-sm">@L.Get("Product.Physical")</MudChip>
+                                }
+                                @if (product.OldPrice.HasValue && product.OldPrice.Value > product.Price)
+                                {
+                                    var discount = (int)Math.Round((1 - (product.Price / product.OldPrice.Value)) * 100);
+                                    <MudChip T="string" Color="Color.Error" Variant="Variant.Filled" Size="Size.Small" Class="fw-bold shadow-sm">-@discount%</MudChip>
+                                }
+                            </div>
+                        </div>
+                        
+                    </div>
+
+                    @if (product.Images != null && product.Images.Any())
+                    {
+                        <div class="ic-product-thumbnails d-flex gap-3 overflow-x-auto py-2">
+                             <!-- Main Image Thumb -->
+                             <div class="cursor-pointer rounded-lg overflow-hidden border-2 transition-all flex-shrink-0" 
+                                  @onclick="@(() => selectedImage = product.ImageName)" 
+                                  style="@(selectedImage == product.ImageName ? "border-color: var(--mud-palette-primary) !important; width: 80px; height: 80px;" : "border-color: transparent !important; width: 80px; height: 80px; opacity: 0.7;")">
+                                  <img src="@product.ImageName" class="w-100 h-100 object-cover" width="80" height="80" loading="lazy" decoding="async" />
+                             </div>
+                             
+                             <!-- Additional Images -->
+                             @foreach (var img in product.Images)
+                             {
+                                 <div class="cursor-pointer rounded-lg overflow-hidden border-2 transition-all flex-shrink-0" 
+                                      @onclick="@(() => selectedImage = img)" 
+                                      style="@(selectedImage == img ? "border-color: var(--mud-palette-primary) !important; width: 80px; height: 80px;" : "border-color: transparent !important; width: 80px; height: 80px; opacity: 0.7;")">
+                                      <img src="@img" class="w-100 h-100 object-cover" width="80" height="80" loading="lazy" decoding="async" />
+                                 </div>
+                             }
+                        </div>
+                    }
+
+
+                </div>
+            </MudItem>
+
+            <!-- Product Info (Right Column) -->
+            <MudItem xs="12" md="5">
+                <div class="d-flex flex-column ic-product-buybox">
+                    
+                    <!-- Rating & Stock -->
+                    <div class="d-flex align-center justify-space-between mb-2">
+                         <div class="d-flex align-center gap-1 cursor-pointer hover-text-primary" onclick="document.getElementById('reviews-tab').scrollIntoView({behavior: 'smooth'})">
+                            <MudRating ReadOnly="true" SelectedValue="@((int)Math.Round(product.AverageRating))" Size="Size.Small" Color="Color.Warning" />
+                            <MudText Typo="Typo.caption" Class="text-muted ms-1">(@product.ReviewCount)</MudText>
+                        </div>
+                        
+                        <!-- Stock Indicator Moved to Price Section -->
+                    </div>
+
+                    <!-- Category & Tags -->
+                    <div class="d-flex flex-wrap align-center gap-2 mb-2">
+                        @if (!string.IsNullOrEmpty(product.CategoryName))
+                        {
+                            <span class="category-badge">@product.CategoryName</span>
+                        }
+                        @if (product.TagsArray != null && product.TagsArray.Any())
+                        {
+                            <div class="d-flex flex-wrap gap-1">
+                                @foreach (var tag in product.TagsArray)
+                                {
+                                    <span class="tag-badge">#@tag</span>
+                                }
+                            </div>
+                        }
+                    </div>
+
+                    <!-- Title -->
+                    <MudText Typo="Typo.h4" Class="fw-bold mb-4 lh-tight">@GetTranslatedTitle()</MudText>
+                    
+                    <!-- Price -->
+                    <div class="ic-price-panel mb-6 pa-4 d-flex align-center justify-space-between flex-wrap gap-3">
+                        <div class="d-flex align-baseline gap-3">
+                            <MudText Typo="Typo.h3" Color="Color.Primary" Class="fw-extrabold">
+                                @LocaleService.FormatPrice(product.Price, product.DisplayPrice, product.DisplayCurrency)
+                            </MudText>
+                            @if (product.OldPrice.HasValue && product.OldPrice.Value > product.Price)
+                            {
+                                <MudText Typo="Typo.h6" Class="text-muted text-decoration-line-through">
+                                    @LocaleService.FormatPrice(product.OldPrice.Value, product.DisplayOldPrice, product.DisplayCurrency)
+                                </MudText>
+                            }
+                        </div>
+
+                        <!-- Stock Status (Moved Here) -->
+                        @if (product.Qty > 0 || product.IsDigital)
+                        {
+                             <MudChip T="string" Color="Color.Success" Variant="Variant.Filled" Size="Size.Small" Icon="@Icons.Material.Filled.CheckCircle" Class="fw-bold">
+                                @L.Get("ProductDetails.InStock")
+                            </MudChip>
+                        }
+                        else
+                        {
+                             <MudChip T="string" Color="Color.Error" Variant="Variant.Filled" Size="Size.Small" Icon="@Icons.Material.Filled.Cancel" Class="fw-bold">
+                                @L.Get("ProductDetails.OutOfStock")
+                            </MudChip>
+                        }
+                    </div>
+
+                    <!-- Short Description -->
+                     @if (!string.IsNullOrEmpty(GetTranslatedDescription()))
+                    {
+                        <MudText Typo="Typo.body1" Class="text-muted mb-6 lh-relaxed line-clamp-3">
+                            @GetTranslatedDescription()
+                        </MudText>
+                    }
+                    
+
+
+                    <!-- Product Type Alerts -->
+                    @if (product.IsDigital)
+                    {
+                        <MudAlert Severity="Severity.Success" Variant="Variant.Outlined" Class="mb-6 rounded-lg border-success">
+                             <MudText Typo="Typo.subtitle2" Class="fw-bold">@L.Get("ProductDetails.DigitalProduct")</MudText>
+                             <MudText Typo="Typo.caption">@L.Get("ProductDetails.DeliveryViaDownload")</MudText>
+                        </MudAlert>
+                    }
+
+                    <!-- Actions -->
+                    <div class="d-flex flex-column gap-4 mb-8">
+                        @if (!product.IsDigital)
+                        {
+                            <div class="d-flex align-center gap-4">
+                                <div class="d-flex align-center border rounded-lg px-2 py-1" style="width: fit-content;">
+                                    <MudIconButton Icon="@Icons.Material.Filled.Remove" Size="Size.Small" OnClick="() => ChangeQuantity(-1)" Disabled="@(quantity <= 1 || isCalculatingShipping)" />
+                                    <MudText Class="px-4 fw-bold">@quantity</MudText>
+                                    <MudIconButton Icon="@Icons.Material.Filled.Add" Size="Size.Small" OnClick="() => ChangeQuantity(1)" Disabled="@(quantity >= product.Qty || isCalculatingShipping)" />
+                                </div>
+                                <MudText Typo="Typo.caption" Class="text-muted">@L.Get("Product.Quantity")</MudText>
+                            </div>
+                        }
+
+                        @if (hasPurchasedProduct && product.IsDigital)
+                        {
+                             <MudButton Variant="Variant.Filled" Color="Color.Success" Size="Size.Large" FullWidth="true" StartIcon="@Icons.Material.Filled.Check" Class="rounded-lg py-3 fw-bold" Disabled="true">
+                                @L.Get("ProductDetails.AlreadyPurchased")
+                            </MudButton>
+                        }
+                        else
+                        {
+                            <MudButton Variant="Variant.Filled" Color="Color.Primary" Size="Size.Large" FullWidth="true"
+                                       StartIcon="@(isAdding ? null : Icons.Material.Filled.AddShoppingCart)"
+                                       OnClick="AddToCart"
+                                       Disabled="@((!product.IsDigital && product.Qty == 0) || isAdding)"
+                                       Class="rounded-lg py-4 fw-bold shadow-lg transition-all hover-translate-y-1">
+                                @if (isAdding)
+                                {
+                                    <MudProgressCircular Size="Size.Small" Indeterminate="true" Class="ms-n1 me-2 text-white" />
+                                    <span>@L.Get("Common.Adding")</span>
+                                }
+                                else
+                                {
+                                    <span>@L.Get("Cart.AddToCart")</span>
+                                }
+                            </MudButton>
+                        }
+                    </div>
+
+                    <!-- Social Sharing -->
+                    <div class="d-flex align-center gap-2 mt-4 mb-8">
+                        <MudText Typo="Typo.caption" Class="fw-bold me-2">@L.Get("ProductDetails.Share"):</MudText>
+                        <MudIconButton Icon="@Icons.Custom.Brands.WhatsApp" Color="Color.Success" OnClick="ShareToWhatsapp" title="WhatsApp" Size="Size.Small" />
+                        <MudIconButton Icon="@Icons.Custom.Brands.Facebook" Color="Color.Primary" OnClick="ShareToFacebook" title="Facebook" Size="Size.Small" />
+                        <MudIconButton Icon="@Icons.Custom.Brands.Twitter" Color="Color.Info" OnClick="ShareToTwitter" title="X / Twitter" Size="Size.Small" />
+                        <MudIconButton Icon="@Icons.Material.Filled.ContentCopy" Color="Color.Default" OnClick="CopyLink" title="@L.Get("ProductDetails.CopyLink")" Size="Size.Small" />
+                    </div>
+
+                    <!-- SEO Metadata -->
+                    <PageTitle>@GetTranslatedTitle() | Ideal Creative</PageTitle>
+                    <HeadContent>
+                        <meta property="og:title" content="@GetTranslatedTitle()" />
+                        <meta property="og:description" content="@GetTranslatedDescription()" />
+                        <meta property="og:image" content="@GetMainImageUrl()" />
+                        <meta property="og:url" content="@Navigation.Uri" />
+                        <meta name="description" content="@GetTranslatedDescription()" />
+                    </HeadContent>
+
+
+                    
+                    <!-- Admin Download (If Applicable) -->
+                     <AuthorizeView Roles="Admin">
+                        @if (!string.IsNullOrEmpty(product.DigitalFilePath))
+                        {
+                             <MudButton Variant="Variant.Outlined" Color="Color.Warning" FullWidth="true" StartIcon="@Icons.Material.Filled.AdminPanelSettings" OnClick="DownloadDigitalFileAdmin" Disabled="@isDownloadingAdmin" Class="mb-4 text-transform-none">
+                                @if (isDownloadingAdmin) { <span>@L.Get("Common.Loading")</span> } else { <span>@L.Get("ProductDetails.AdminAccess"): @L.Get("ProductDetails.DownloadFile")</span> }
+                             </MudButton>
+                        }
+                    </AuthorizeView>
+
+                    <!-- Shipping Calculator (Physical Only) -->
+                    @if (!product.IsDigital)
+                    {
+                        <div class="mt-8">
+                            <MudExpansionPanels Elevation="0" MultiExpansion="false" Class="border rounded-xl bg-gray-50 overflow-hidden shadow-none">
+                                <MudExpansionPanel Gutters="false" Class="shadow-none" Text="Entrega ou retirada">
+                                    <TitleContent>
+                                        <div class="d-flex align-center gap-2">
+                                            <MudIcon Icon="@Icons.Material.Filled.LocalShipping" Color="Color.Primary" />
+                                            <MudText Typo="Typo.subtitle1" Class="fw-bold">
+                                                @(isUserLoggedIn && !string.IsNullOrEmpty(shippingZipCode) ? "Opções de entrega e retirada" : "Entrega ou retirada")
+                                            </MudText>
+                                        </div>
+                                    </TitleContent>
+                                    <ChildContent>
+                                        <div class="pa-2">
+                                            @if (isUserLoggedIn)
+                                            {
+                                                if (string.IsNullOrEmpty(shippingZipCode))
+                                                {
+                                                    <div class="pa-2 border rounded bg-white text-center">
+                                                        <MudText Typo="Typo.caption" Color="Color.Warning" Class="d-block mb-1">Para receber em casa, cadastre seu CEP. A retirada local continua disponível abaixo.</MudText>
+                                                        <MudButton Variant="Variant.Text" Color="Color.Primary" Size="Size.Small" Href="/my-account/profile" StartIcon="@Icons.Material.Filled.Person">
+                                                            @L.Get("ProductDetails.GoToProfile")
+                                                        </MudButton>
+                                                    </div>
+                                                }
+                                                else
+                                                {
+                                                    <div class="d-flex justify-space-between align-center mb-2 pa-2 bg-white rounded border">
+                                                        <MudText Typo="Typo.caption" Class="text-muted">CEP: <b>@shippingZipCode</b></MudText>
+                                                        <MudTooltip Text="@L.Get("ProductDetails.ChangeInProfile")">
+                                                            <MudIconButton Icon="@Icons.Material.Filled.Edit" Size="Size.Small" Color="Color.Primary" Href="/my-account/profile" />
+                                                        </MudTooltip>
+                                                    </div>
+                                                }
+                                            }
+                                            else
+                                            {
+                                                if (string.IsNullOrEmpty(shippingZipCode))
+                                                {
+                                                    <div class="d-flex gap-2 mb-2">
+                                                        <MudTextField @bind-Value="shippingZipCode" 
+                                                                      Placeholder="00000-000" 
+                                                                      Variant="Variant.Outlined" 
+                                                                      Margin="Margin.Dense" 
+                                                                      Class="bg-white rounded-lg" 
+                                                                      Mask="@(new PatternMask("00000-000"))"
+                                                                      Immediate="true"
+                                                                      OnKeyDown="HandleShippingKeyDown" />
+                                                        <MudButton Variant="Variant.Filled" 
+                                                                   Color="Color.Primary" 
+                                                                   Size="Size.Small"
+                                                                   OnClick="CalculateShipping" 
+                                                                   Disabled="@isCalculatingShipping" 
+                                                                   Class="rounded-lg px-6">
+                                                            @if(isCalculatingShipping) { <MudProgressCircular Size="Size.Small" Indeterminate="true"/> } else { @L.Get("ProductDetails.Calculate") }
+                                                        </MudButton>
+                                                    </div>
+                                                }
+                                                else
+                                                {
+                                                    <div class="d-flex justify-space-between align-center mb-2 pa-2 bg-white rounded border">
+                                                        <MudText Typo="Typo.caption" Class="text-muted">CEP: <b>@shippingZipCode</b></MudText>
+                                                        <MudLink Typo="Typo.caption" OnClick="@(() => { shippingZipCode = ""; shippingQuotes = null; StateHasChanged(); })">@L.Get("ProductDetails.Change")</MudLink>
+                                                    </div>
+                                                }
+                                            }
+                                            
+                                            @if(!string.IsNullOrEmpty(shippingError)) { <MudText Color="Color.Error" Typo="Typo.caption" Class="d-block mb-2">@shippingError</MudText> }
+                                            
+                                            @if(shippingQuotes != null)
+                                            {
+                                                <div class="d-flex flex-column gap-1 mt-2">
+                                                    @if (!shippingQuotes.Any())
+                                                    {
+                                                        <MudText Typo="Typo.caption" Class="text-muted pa-2 d-block text-center border rounded-lg">Nenhuma opção de frete disponível.</MudText>
+                                                    }
+                                                    @foreach(var quote in shippingQuotes.GroupBy(q => q.Id).Select(g => g.First()))
+                                                    {
+                                                        var isSelected = selectedShippingQuote?.Id == quote.Id && selectedShippingQuote?.Name == quote.Name;
+                                                        <div class="d-flex justify-space-between align-center pa-2 border rounded @(isSelected ? "border-primary bg-primary-lighten-5" : "bg-light-soft") cursor-pointer transition-all"
+                                                             @onclick="() => SelectShippingQuote(quote)">
+                                                            <div>
+                                                                <MudText Typo="Typo.caption" Class="fw-bold">@quote.Company (@quote.Name)</MudText>
+                                                                @if (quote.Id == 3)
+                                                                {
+                                                                    <MudText Typo="Typo.caption" Class="d-block text-muted">@(quote.DeliveryTime == 0 ? "Disponível após confirmação" : $"Pronto em até {quote.DeliveryTime} dia(s)")</MudText>
+                                                                    @if (!string.IsNullOrWhiteSpace(quote.Description))
+                                                                    {
+                                                                        <MudText Typo="Typo.caption" Class="d-block text-muted mt-1">@quote.Description</MudText>
+                                                                    }
+                                                                }
+                                                                else
+                                                                {
+                                                                    <MudText Typo="Typo.caption" Class="d-block text-muted">@quote.DeliveryTime @L.Get("ProductDetails.BusinessDays")</MudText>
+                                                                }
+                                                            </div>
+                                                            <div class="text-end">
+                                                                <p class="mud-typography mud-typography-subtitle2 mud-success-text fw-bold mb-0">@L.FormatCurrency(quote.Price)</p>
+                                                                @if (isSelected)
+                                                                {
+                                                                    <MudIcon Icon="@Icons.Material.Filled.CheckCircle" Size="Size.Small" Color="Color.Primary" />
+                                                                }
+                                                            </div>
+                                                        </div>
+                                                    }
+                                                </div>
+                                            }
+                                        </div>
+                                    </ChildContent>
+                                </MudExpansionPanel>
+                            </MudExpansionPanels>
+                        </div>
+                    }
+                </div>
+            </MudItem>
+        </MudGrid>
+        
+        <!-- Tabs Section -->
+        <div class="mt-16" id="reviews-tab">
+            <MudTabs Elevation="0" Outlined="true" Color="Color.Transparent" ActiveTabClass="border-b-2 border-primary text-primary fw-bold" SliderColor="Color.Primary" Rounded="true" PanelClass="mt-6">
+                <MudTabPanel Text="@L.Get("ProductDetails.ProductDescription")">
+                     <MudPaper Elevation="0" Class="pa-8 bg-white border rounded-xl">
+                        @if (!string.IsNullOrEmpty(GetTranslatedFullDesc()))
+                        {
+                             <div class="content-typography">@((MarkupString)GetTranslatedFullDesc())</div>
+                        }
+                        else
+                        {
+                            <MudText Typo="Typo.body1" Class="text-muted">@GetTranslatedDescription()</MudText>
+                        }
+                    </MudPaper>
+                </MudTabPanel>
+                
+                @if (!string.IsNullOrEmpty(product.VideoUrl))
+                {
+                    <MudTabPanel Text="@L.Get("ProductDetails.Video")">
+                        <div class="d-flex justify-center my-4">
+                             <div class="rounded-xl overflow-hidden shadow-lg w-100" style="max-width: 900px; aspect-ratio: 16/9;">
+                                <iframe src="@GetEmbedUrl(product.VideoUrl)" class="w-100 h-100" frameborder="0" allowfullscreen></iframe>
+                            </div>
+                        </div>
+                    </MudTabPanel>
+                }
+                
+                <MudTabPanel Text="@L.Get("ProductDetails.Reviews")" BadgeData="@product.ReviewCount.ToString()" BadgeColor="Color.Primary">
+                    <MudPaper Elevation="0" Class="pa-6 border rounded-xl">
+                         <BlazorClient.Components.ProductReviews ProductId="@Id" CanReview="@hasPurchasedProduct" />
+                    </MudPaper>
+                </MudTabPanel>
+                
+                @if (product.IsDigital && !string.IsNullOrEmpty(product.DownloadUrl) && !product.HideDigitalFromCustomer)
+                {
+                     <MudTabPanel Text="@L.Get("ProductDetails.Download")">
+                        <div class="d-flex flex-column align-center py-12 text-center">
+                            <MudIcon Icon="@Icons.Material.Filled.CloudDownload" Color="Color.Primary" Size="Size.Large" style="font-size: 4rem;" Class="mb-4" />
+                            <MudText Typo="Typo.h5" Class="fw-bold mb-2">@L.Get("ProductDetails.DigitalProduct")</MudText>
+                             <MudText Typo="Typo.body1" Class="text-muted mb-6">@L.Get("ProductDetails.DownloadAfterPurchase")</MudText>
+                             <MudButton Variant="Variant.Filled" Color="Color.Success" Size="Size.Large" Href="@product.DownloadUrl" Target="_blank" StartIcon="@Icons.Material.Filled.Download">
+                                 @L.Get("ProductDetails.ProductDownload")
+                             </MudButton>
+                        </div>
+                    </MudTabPanel>
+                }
+            </MudTabs>
+        </div>
+
+        <!-- Related Products -->
+         @if (relatedProducts != null && relatedProducts.Count > 0)
+        {
+            <div class="mt-16">
+                 <MudText Typo="Typo.h5" Class="fw-bold mb-6">@L.Get("Product.RelatedProducts")</MudText>
+                 <MudGrid Spacing="4">
+                    @foreach (var item in relatedProducts)
+                    {
+                        <MudItem xs="6" sm="4" md="3">
+                            <BlazorClient.Components.ProductCard Product="@item" />
+                        </MudItem>
+                    }
+                </MudGrid>
+            </div>
+        }
+
+    </MudContainer>
+}
+
+@inject ICartService CartService
+
+
+
+<style>
+    .ynex-product-details .group-hover-scale-105:hover { transform: scale(1.05); }
+    .bg-black-opacity-0 { background-color: rgba(0,0,0,0); }
+    .group-hover-bg-black-opacity-10:hover { background-color: rgba(0,0,0,0.05); }
+    .hover-translate-y-1:hover { transform: translateY(-2px); }
+    .content-typography h1, .content-typography h2, .content-typography h3 { font-weight: bold; margin-bottom: 0.5rem; margin-top: 1.5rem; }
+    .content-typography p { line-height: 1.7; margin-bottom: 1rem; color: #4a5568; }
+    .content-typography ul { list-style-type: disc; padding-left: 1.5rem; margin-bottom: 1rem; }
+</style>
+
+@code {
+    [Parameter]
+    public string? Id { get; set; }
+
+    private List<BreadcrumbItem> _breadcrumbs = new();
+
+    private void InitializeBreadcrumbs()
+    {
+        _breadcrumbs.Clear();
+        _breadcrumbs.Add(new BreadcrumbItem(L.Get("Nav.Home"), "/"));
+        _breadcrumbs.Add(new BreadcrumbItem(L.Get("Nav.Shop"), "/shop"));
+        _breadcrumbs.Add(new BreadcrumbItem(GetTranslatedTitle(), null, disabled: true));
+    }
+
+    private Product? product;
+    private List<Product>? relatedProducts;
+
+    private bool isLoading = true;
+    private string errorMessage = string.Empty;
+    private int quantity = 1;
+
+    private string? selectedImage;
+
+    
+    // Admin download state
+    private bool isDownloadingAdmin = false;
+    private string adminDownloadError = string.Empty;
+    
+    // Digital product ownership check
+    private bool hasPurchasedProduct = false;
+    
+    // Tags for translation
+    private List<Tag> availableTags = new();
+    
+    /// <summary>
+    /// Download digital file as admin (bypasses purchase verification)
+    /// </summary>
+    private async Task DownloadDigitalFileAdmin()
+    {
+        if (product == null) return;
+        
+        isDownloadingAdmin = true;
+        adminDownloadError = string.Empty;
+        StateHasChanged();
+        
+        try
+        {
+            var downloadLink = await ProductService.GetAdminDownloadLinkAsync(product.Id);
+            if (downloadLink != null && !string.IsNullOrEmpty(downloadLink.DownloadUrl))
+            {
+                // Open download URL in new tab
+                await JSRuntime.InvokeVoidAsync("window.open", downloadLink.DownloadUrl, "_blank");
+            }
+            else
+            {
+                adminDownloadError = L.Get("ProductDetails.DownloadLinkError");
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error downloading admin file: {ex.Message}");
+            adminDownloadError = L.Get("ProductDetails.GenerateLinkError");
+        }
+        finally
+        {
+            isDownloadingAdmin = false;
+            StateHasChanged();
+        }
+
+    }
+    
+    // Shipping Calculator State
+    private string shippingZipCode = string.Empty;
+    private bool isCalculatingShipping = false;
+    private string shippingError = string.Empty;
+    private List<ShippingQuoteResponse>? shippingQuotes;
+    private ShippingQuoteResponse? selectedShippingQuote;
+
+    private async Task SelectShippingQuote(ShippingQuoteResponse quote)
+    {
+        selectedShippingQuote = quote;
+        
+        // Persist ZipCode to cart root so backend can recalculate later
+        if (!string.IsNullOrEmpty(shippingZipCode))
+        {
+            await CartService.UpdateShippingZipCode(shippingZipCode);
+        }
+        
+        StateHasChanged();
+    }
+
+    /// <summary>
+    /// Change quantity and auto-recalculate shipping if CEP is available
+    /// </summary>
+    private async Task ChangeQuantity(int delta)
+    {
+        if (product == null) return;
+        
+        var newQty = quantity + delta;
+        if (newQty < 1 || newQty > product.Qty) return;
+        
+        quantity = newQty;
+        StateHasChanged();
+        
+        // Auto-recalculate if we have a valid CEP and shipping was already calculated
+        if (!string.IsNullOrEmpty(shippingZipCode) && shippingQuotes != null && shippingQuotes.Any())
+        {
+            // Remember previously selected quote to re-select after recalc
+            var previousSelectedId = selectedShippingQuote?.Id;
+            var previousSelectedName = selectedShippingQuote?.Name;
+            
+            await CalculateShipping();
+            
+            // Try to re-select the same shipping option
+            if (shippingQuotes != null && previousSelectedId.HasValue)
+            {
+                var matchingQuote = shippingQuotes.FirstOrDefault(q => q.Id == previousSelectedId.Value);
+                if (matchingQuote != null)
+                {
+                    selectedShippingQuote = matchingQuote;
+                }
+            }
+            else if (shippingQuotes != null && !string.IsNullOrEmpty(previousSelectedName))
+            {
+                var matchingQuote = shippingQuotes.FirstOrDefault(q => q.Name == previousSelectedName);
+                if (matchingQuote != null)
+                {
+                    selectedShippingQuote = matchingQuote;
+                }
+            }
+        }
+    }
+    private bool isUserLoggedIn = false; // Track if user is authenticated
+
+    private async Task CalculateShipping()
+    {
+        if (product == null) return;
+
+        // Basic clean up of CEP
+        var cleanCep = shippingZipCode.Replace("-", "").Trim();
+        if (!string.IsNullOrEmpty(cleanCep) && cleanCep.Length != 8)
+        {
+            shippingError = L.Get("ProductDetails.InvalidZipCode");
+            return;
+        }
+
+        isCalculatingShipping = true;
+        shippingError = string.Empty;
+        shippingQuotes = null;
+        selectedShippingQuote = null;
+        StateHasChanged();
+
+        try
+        {
+            var request = new CalculateShippingRequest
+            {
+                ToZipCode = cleanCep,
+                Products = new List<ShippingProductInfo>
+                {
+                    new ShippingProductInfo
+                    {
+                        Id = product.Id,
+                        // Clamp dimensions to common carrier limits (100cm) to avoid "no options" errors
+                        Width = product.Width > 100 ? 100 : product.Width,
+                        Height = product.Height > 100 ? 100 : product.Height,
+                        Length = product.Length > 100 ? 100 : product.Length,
+                        Weight = (decimal)(product.Weight > 30 ? 30 : product.Weight),
+                        InsuranceValue = (decimal)product.Price,
+                        Quantity = quantity
+                    }
+                }
+            };
+
+            shippingQuotes = await OrderService.CalculateShipping(request);
+            if (shippingQuotes.Count == 1 && shippingQuotes[0].Id == 3)
+                selectedShippingQuote = shippingQuotes[0];
+            
+            if (shippingQuotes == null || !shippingQuotes.Any()) 
+            {
+                shippingQuotes = new List<ShippingQuoteResponse>();
+                shippingError = "Não foi possível calcular frete para este CEP com as dimensões deste produto.";
+            }
+        }
+        catch (Exception ex)
+        {
+            shippingError = ex.Message;
+            Console.WriteLine($"Shipping calc error: {ex}");
+        }
+        finally
+        {
+            isCalculatingShipping = false;
+            StateHasChanged();
+        }
+    }
+    
+
+    protected override async Task OnInitializedAsync()
+    {
+        var authState = await AuthStateProvider.GetAuthenticationStateAsync();
+        isUserLoggedIn = authState.User.Identity?.IsAuthenticated ?? false;
+        
+        L.OnLanguageChanged += HandleLanguageChanged;
+    }
+
+    private async Task EnsureUserZipCodeLoaded()
+    {
+        if (isUserLoggedIn && string.IsNullOrEmpty(shippingZipCode))
+        {
+            try 
+            {
+                var profile = await UserService.GetProfileAsync();
+                if (profile != null && !string.IsNullOrEmpty(profile.ZipCode))
+                {
+                    shippingZipCode = profile.ZipCode;
+                }
+            }
+            catch { }
+        }
+    }
+
+    private async Task HandleShippingKeyDown(KeyboardEventArgs e)
+    {
+        if (e.Key == "Enter")
+        {
+            await CalculateShipping();
+        }
+    }
+
+    protected override async Task OnParametersSetAsync()
+    {
+        await LoadProduct();
+    }
+
+    private async void HandleLanguageChanged()
+    {
+        await InvokeAsync(StateHasChanged);
+        InitializeBreadcrumbs();
+    }
+
+    public void Dispose()
+    {
+        L.OnLanguageChanged -= HandleLanguageChanged;
+    }
+
+    private async Task LoadProduct()
+    {
+        if (string.IsNullOrEmpty(Id))
+        {
+            Navigation.NavigateTo("/");
+            return;
+        }
+
+        isLoading = true;
+        errorMessage = string.Empty;
+        product = null;
+        relatedProducts = null;
+
+        
+        // Reset download check
+        hasPurchasedProduct = false;
+
+        try
+        {
+            // 1. Load Product
+            product = await ProductService.GetProductAsync(Id);
+            
+            if (product != null)
+            {
+                // Registra uma visita pública de forma atômica no backend.
+                // O endpoint não exige login e não altera o preço/estoque.
+                try
+                {
+                    await ProductService.UpdateProductStatsAsync(product.Id.ToString(), new UpdateProductStatsDto());
+                }
+                catch { }
+
+                // Hotfix: Clamp invalid dimensions (> 105cm) to 20cm to ensure shipping calculation returns options
+                if (product.Height > 105 || product.Width > 105 || product.Length > 105)
+                {
+                    product.Height = 20;
+                    product.Width = 20;
+                    product.Length = 20;
+                    if (product.Weight > 30) product.Weight = 1;
+                }
+
+                selectedImage = product.ImageName;
+                InitializeBreadcrumbs();
+                
+                // 2. Load Related Products
+                var relatedResult = await ProductService.GetProductsAsync(page: 1, pageSize: 4, categoryId: product.CategoryId);
+                relatedProducts = relatedResult.Items.Where(p => p.Id != product.Id).ToList();
+
+                // Verifica a compra confirmada para liberar avaliação e download.
+                var authState = await AuthStateProvider.GetAuthenticationStateAsync();
+                if (authState.User.Identity?.IsAuthenticated ?? false)
+                {
+                    hasPurchasedProduct = await OrderService.HasPurchasedProduct(product.Id);
+                }
+            }
+            else
+            {
+                errorMessage = L.Get("ProductDetails.NotFound");
+            }
+        }
+        catch (Exception ex)
+        {
+            errorMessage = L.Get("ProductDetails.LoadError");
+            Console.WriteLine(ex.Message);
+        }
+        finally
+        {
+            isLoading = false;
+            StateHasChanged();
+            
+            // 4. Load/Ensure User ZipCode (if logged in)
+            await EnsureUserZipCodeLoaded();
+
+            // 5. Load delivery choices even without CEP so local pickup remains available.
+            if (product != null && !product.IsDigital)
+            {
+                await CalculateShipping();
+            }
+        }
+    }
+
+    private string GetMainImageUrl()
+    {
+        if (!string.IsNullOrEmpty(selectedImage))
+        {
+            return selectedImage;
+        }
+        if (product != null && !string.IsNullOrEmpty(product.ImageName))
+        {
+            return product.ImageName;
+        }
+        return "assets/img/product/default-placeholder.png";
+    }
+
+    private string GetEmbedUrl(string videoUrl)
+    {
+        if (string.IsNullOrEmpty(videoUrl)) return string.Empty;
+        
+        try 
+        {
+            var match = System.Text.RegularExpressions.Regex.Match(videoUrl, @"(?:youtube\.com\/(?:[^\/]+\/.+\/|(?:v|e(?:mbed)?)\/|.*[?&]v=)|youtu\.be\/)([^""&?\/\s]{11})");
+            if (match.Success)
+            {
+                return $"https://www.youtube.com/embed/{match.Groups[1].Value}";
+            }
+        }
+        catch (Exception ex)
+        {
+             Console.WriteLine($"Error parsing video URL: {ex.Message}");
+        }
+
+        return videoUrl;
+    }
+    
+    // Translation Helpers
+    private string GetTranslatedTitle()
+    {
+        if (product == null) return string.Empty;
+        var lang = L.CurrentLanguage;
+        if (product.Translations != null && product.Translations.TryGetValue(lang, out var trans) && !string.IsNullOrEmpty(trans.Title))
+        {
+            return trans.Title;
+        }
+        return product.Title ?? string.Empty;
+    }
+
+    private string GetTranslatedDescription()
+    {
+        if (product == null) return string.Empty;
+        var lang = L.CurrentLanguage;
+        if (product.Translations != null && product.Translations.TryGetValue(lang, out var trans) && !string.IsNullOrEmpty(trans.Description))
+        {
+            return trans.Description;
+        }
+        return product.Description ?? string.Empty;
+    }
+
+    private string GetTranslatedFullDesc()
+    {
+         if (product == null) return string.Empty;
+        var lang = L.CurrentLanguage;
+        // Assuming FullDescription is in the translation map or separate property? 
+        // The Model 'Product' has Translations dictionary with ProductTranslation.
+        // Let's assume ProductTranslation has FullDescription. If not, fallback to Description.
+        if (product.Translations != null && product.Translations.TryGetValue(lang, out var trans))
+        {
+            // If the model doesn't have FullDescription, just use Description or add it to model. 
+            // Based on previous files, logic used Description. 
+            return trans.Description ?? string.Empty; 
+        }
+        return product.Description ?? string.Empty;
+    }
+
+    private string GetTranslatedTagName(Tag tag)
+    {
+         var lang = L.CurrentLanguage;
+         if (tag.Translations != null && tag.Translations.TryGetValue(lang, out var trans) && !string.IsNullOrEmpty(trans.Title))
+         {
+             return trans.Title;
+         }
+         return tag.Title;
+    }
+
+    private bool isAdding = false;
+
+    private async Task AddToCart()
+    {
+        if (product == null) return;
+        
+        isAdding = true;
+        try
+        {
+            var cartItem = new CartItem
+            {
+                ProductId = product.Id,
+                ProductTitle = product.Title ?? "Product",
+                ProductImage = product.ImageName,
+                Price = product.Price,
+                DisplayPrice = product.DisplayPrice,
+                DisplayCurrency = product.DisplayCurrency,
+                Quantity = quantity,
+                IsDigital = product.IsDigital,
+                IsSubscription = product.IsSubscription,
+                
+                // Shipping selection
+                SelectedShippingServiceId = selectedShippingQuote?.Id,
+                SelectedShippingName = selectedShippingQuote?.Name,
+                SelectedShippingCompany = selectedShippingQuote?.Company,
+                SelectedShippingPrice = selectedShippingQuote != null ? (decimal)selectedShippingQuote.Price : null,
+                SelectedShippingDeliveryTime = selectedShippingQuote?.DeliveryTime,
+                SelectedShippingDescription = selectedShippingQuote?.Description
+            };
+
+            await CartService.AddToCart(cartItem);
+             // Show feedback (Snackbar injected implicitly via MainLayout or explicitly here if we want)
+             // But usually CartService handles toast or we do it here.
+             // We'll trust CartService or Component to handle it, but adding a snackbar here implies standardizing usage.
+        }
+        catch (Exception ex)
+        {
+             Console.WriteLine(ex.Message);
+        }
+        finally
+        {
+            isAdding = false;
+        }
+    }
+    
+    private async Task CopyLink()
+    {
+        var lang = L.CurrentLanguage;
+        var uriBuilder = new UriBuilder(Navigation.Uri);
+        var query = System.Web.HttpUtility.ParseQueryString(uriBuilder.Query);
+        query["lang"] = lang;
+        uriBuilder.Query = query.ToString();
+        
+        await JSRuntime.InvokeVoidAsync("navigator.clipboard.writeText", uriBuilder.ToString());
+    }
+
+    private async Task ShareToWhatsapp()
+    {
+         var lang = L.CurrentLanguage;
+         var uri = Navigation.Uri;
+         if (!uri.Contains("?")) uri += $"?lang={lang}";
+         else if (!uri.Contains("lang=")) uri += $"&lang={lang}";
+
+         var url = System.Net.WebUtility.UrlEncode(uri);
+         var title = System.Net.WebUtility.UrlEncode(GetTranslatedTitle());
+         await JSRuntime.InvokeVoidAsync("window.open", $"https://api.whatsapp.com/send?text={title}%20{url}", "_blank");
+    }
+
+    private async Task ShareToFacebook()
+    {
+         var lang = L.CurrentLanguage;
+         var uri = Navigation.Uri;
+         if (!uri.Contains("?")) uri += $"?lang={lang}";
+         else if (!uri.Contains("lang=")) uri += $"&lang={lang}";
+
+         var url = System.Net.WebUtility.UrlEncode(uri);
+         await JSRuntime.InvokeVoidAsync("window.open", $"https://www.facebook.com/sharer/sharer.php?u={url}", "_blank");
+    }
+
+    private async Task ShareToTwitter()
+    {
+         var lang = L.CurrentLanguage;
+         var uri = Navigation.Uri;
+         if (!uri.Contains("?")) uri += $"?lang={lang}";
+         else if (!uri.Contains("lang=")) uri += $"&lang={lang}";
+
+         var url = System.Net.WebUtility.UrlEncode(uri);
+         var title = System.Net.WebUtility.UrlEncode(GetTranslatedTitle());
+         await JSRuntime.InvokeVoidAsync("window.open", $"https://twitter.com/intent/tweet?text={title}&url={url}", "_blank");
+    }
+}

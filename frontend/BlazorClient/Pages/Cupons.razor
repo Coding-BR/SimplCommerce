@@ -1,0 +1,145 @@
+@page "/cupons"
+@using BlazorClient.Core.Services
+@using BlazorClient.Models
+@inject ICouponService CouponService
+@inject IJSRuntime JSRuntime
+@inject ILocalizationService L
+@inject ISnackbar Snackbar
+@implements IDisposable
+
+<PageTitle>Cupons | IdealCreative</PageTitle>
+
+<main class="ic-coupons">
+    <section class="ic-coupons-hero">
+        <MudContainer MaxWidth="MaxWidth.Large">
+            <MudBreadcrumbs Items="_breadcrumbs" Class="ic-coupons-breadcrumbs" />
+            <div class="ic-coupons-hero-content">
+                <span class="ic-coupons-eyebrow"><MudIcon Icon="@Icons.Material.Filled.LocalOffer" Size="Size.Small" /> BENEFÍCIOS PARA VOCÊ</span>
+                <h1>Cupons disponíveis</h1>
+                <p>Copie o código e aplique no carrinho antes de finalizar sua compra.</p>
+            </div>
+        </MudContainer>
+    </section>
+
+    <MudContainer MaxWidth="MaxWidth.Large" Class="ic-coupons-content">
+        @if (isLoading)
+        {
+            <div class="ic-coupon-grid" aria-label="Carregando cupons">
+                @for (var i = 0; i < 3; i++)
+                {
+                    <div class="ic-coupon-skeleton"><MudSkeleton SkeletonType="SkeletonType.Rectangle" Height="255px" /></div>
+                }
+            </div>
+        }
+        else if (!coupons.Any())
+        {
+            <section class="ic-coupons-empty">
+                <span class="ic-coupons-empty-icon"><MudIcon Icon="@Icons.Material.Filled.Sell" /></span>
+                <h2>Nenhum cupom ativo agora</h2>
+                <p>Novas campanhas aparecem aqui. Enquanto isso, conheça os produtos selecionados pela loja.</p>
+                <MudButton Variant="Variant.Filled" Href="/shop" Class="ic-coupons-shop-link">Ver produtos</MudButton>
+            </section>
+        }
+        else
+        {
+            <header class="ic-coupons-intro">
+                <div>
+                    <span class="ic-coupons-section-label">OFERTAS ATIVAS</span>
+                    <h2>Escolha um código para usar hoje</h2>
+                </div>
+                <span class="ic-coupons-count">@coupons.Count @(coupons.Count == 1 ? "cupom disponível" : "cupons disponíveis")</span>
+            </header>
+
+            <section class="ic-coupon-grid" aria-label="Cupons ativos">
+                @foreach (var coupon in coupons)
+                {
+                    <article class="ic-coupon-card">
+                        <aside class="ic-coupon-value" aria-label="@DiscountLabel(coupon)">
+                            <span class="ic-coupon-value-number">@DiscountValue(coupon)</span>
+                            <span class="ic-coupon-value-label">DESCONTO</span>
+                        </aside>
+                        <div class="ic-coupon-details">
+                            <div class="ic-coupon-details-header">
+                                <span class="ic-coupon-status"><span></span> Ativo</span>
+                                <span class="ic-coupon-expiry"><MudIcon Icon="@Icons.Material.Filled.Schedule" Size="Size.Small" /> @ExpiryLabel(coupon)</span>
+                            </div>
+                            <h3>Desconto especial</h3>
+                            <p class="ic-coupon-description">Use este código no checkout e aproveite a oferta enquanto ela estiver disponível.</p>
+                            <dl class="ic-coupon-rules">
+                                @if (coupon.MinPurchaseAmount > 0)
+                                {
+                                    <div><dt>Pedido mínimo</dt><dd>@L.FormatCurrency(coupon.MinPurchaseAmount)</dd></div>
+                                }
+                                <div><dt>Disponibilidade</dt><dd>@RemainingLabel(coupon)</dd></div>
+                            </dl>
+                            <button type="button" class="ic-coupon-code" @onclick="() => CopyToClipboard(coupon.Code)" aria-label="Copiar cupom @coupon.Code">
+                                <span>@coupon.Code</span><MudIcon Icon="@Icons.Material.Filled.ContentCopy" Size="Size.Small" />
+                            </button>
+                            <small>Toque para copiar o código</small>
+                        </div>
+                    </article>
+                }
+            </section>
+        }
+    </MudContainer>
+</main>
+
+@code {
+    private List<Coupon> coupons = new();
+    private bool isLoading = true;
+    private List<BreadcrumbItem> _breadcrumbs = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        L.OnLanguageChanged += HandleLanguageChanged;
+        _breadcrumbs = new List<BreadcrumbItem>
+        {
+            new BreadcrumbItem(L.Get("Nav.Home"), href: "/"),
+            new BreadcrumbItem(L.Get("CouponsPage.Breadcrumb"), href: null, disabled: true)
+        };
+        await LoadCoupons();
+    }
+
+    public void Dispose() => L.OnLanguageChanged -= HandleLanguageChanged;
+
+    private async void HandleLanguageChanged()
+    {
+        await InvokeAsync(() =>
+        {
+            _breadcrumbs[0] = new BreadcrumbItem(L.Get("Nav.Home"), href: "/");
+            _breadcrumbs[1] = new BreadcrumbItem(L.Get("CouponsPage.Breadcrumb"), href: null, disabled: true);
+            StateHasChanged();
+        });
+    }
+
+    private async Task LoadCoupons()
+    {
+        isLoading = true;
+        try { coupons = await CouponService.GetPublicCoupons(); }
+        catch (Exception exception)
+        {
+            Console.WriteLine($"Error loading coupons: {exception.Message}");
+            coupons = [];
+        }
+        finally { isLoading = false; }
+    }
+
+    private string DiscountValue(Coupon coupon) => coupon.DiscountType == "Percentage" ? $"{coupon.Value:0}%" : L.FormatCurrency(coupon.Value);
+    private string DiscountLabel(Coupon coupon) => coupon.DiscountType == "Percentage" ? $"{coupon.Value:0}% de desconto" : $"{L.FormatCurrency(coupon.Value)} de desconto";
+    private string ExpiryLabel(Coupon coupon) => coupon.EndDate.HasValue ? $"Até {L.FormatDate(coupon.EndDate.Value)}" : "Tempo limitado";
+    private string RemainingLabel(Coupon coupon) => coupon.MaxUsesGlobal.HasValue ? $"{Math.Max(0, coupon.MaxUsesGlobal.Value - coupon.CurrentUsesGlobal)} usos" : "Sem limite";
+
+    private async Task CopyToClipboard(string code)
+    {
+        try
+        {
+            await JSRuntime.InvokeVoidAsync("copyToClipboard", code);
+            Snackbar.Add($"Código {code} copiado.", Severity.Success, config => { config.ShowCloseIcon = false; config.VisibleStateDuration = 3000; });
+        }
+        catch (Exception exception)
+        {
+            Console.WriteLine($"Error copying coupon: {exception.Message}");
+            Snackbar.Add(L.Get("CouponsPage.CopyError"), Severity.Error);
+        }
+    }
+}

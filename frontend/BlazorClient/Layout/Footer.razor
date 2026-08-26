@@ -1,0 +1,87 @@
+@using BlazorClient.Models
+@using BlazorClient.Core.Services
+@inject ILocalizationService L
+@implements IDisposable
+
+<footer class="footer_widgets">
+    <div class="container">
+        <div class="row">
+            <div class="col-lg-5 col-md-5 col-sm-5">
+                <div class="footer_widget_list">
+                    <div class="footer_logo">
+                         <a href="/" style="display: inline-block; background: white; padding: 8px 16px; border-radius: 4px;">
+                             @if (!string.IsNullOrEmpty(Settings?.LogoUrl))
+                            {
+                                <img src="@Settings.LogoUrl" alt="Logo" style="max-height: 80px; width: auto; display: block;">
+                            }
+                        </a>
+                    </div>
+                    <div class="footer_contact">
+                        @if (!string.IsNullOrWhiteSpace(Settings?.Contact?.Address))
+                        {
+                            <div class="footer_contact_list">
+                                <span>@L.Get("Footer.OurLocation")</span>
+                                <p>@Settings.Contact.Address</p>
+                            </div>
+                        }
+                        @if (!string.IsNullOrWhiteSpace(Settings?.Contact?.Hotline))
+                        {
+                            <div class="footer_contact_list">
+                                <span>@L.Get("Footer.SupportHotline")</span>
+                                <a href="tel:@Settings.Contact.Hotline">@Settings.Contact.Hotline</a>
+                            </div>
+                        }
+                    </div>
+                    @if (Settings?.SocialLinks?.Any(l => l.IsEnabled) == true)
+                    {
+                        <div class="footer_social">
+                            <ul class="d-flex">
+                            @foreach (var link in Settings.SocialLinks.Where(l => l.IsEnabled))
+                            {
+                                <li><a href="@(link.Url.StartsWith("http") ? link.Url : "https://" + link.Url)" target="_blank" aria-label="@link.Network"><i class="@link.IconClass" aria-hidden="true"></i></a></li>
+                            }
+                            </ul>
+                        </div>
+                    }
+                </div>
+            </div>
+            <div class="col-lg-7 col-md-7 col-sm-7">
+                <div class="footer_widget_list text-right">
+                    <div class="footer_menu">
+                        <ul class="d-flex justify-content-end">
+                            <li><a href="/">@L.Get("Nav.Home")</a></li>
+                            <AuthorizeView Roles="Admin">
+                                <Authorized>
+                                    <li><a href="admin/products">@L.Get("Nav.Admin")</a></li>
+                                </Authorized>
+                            </AuthorizeView>
+                        </ul>
+                    </div>
+                    <div class="copyright_right">
+                        <p>©2025 <span>Ecommerce</span>. @L.Get("Footer.AllRightsReserved")</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</footer>
+
+@code {
+    [Parameter] public SiteSettings? Settings { get; set; }
+
+    protected override void OnInitialized()
+    {
+        L.OnLanguageChanged += HandleLanguageChanged;
+    }
+
+    public void Dispose()
+    {
+        L.OnLanguageChanged -= HandleLanguageChanged;
+    }
+
+    private void HandleLanguageChanged()
+    {
+        InvokeAsync(StateHasChanged);
+    }
+}
+

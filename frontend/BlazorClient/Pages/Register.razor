@@ -1,0 +1,179 @@
+@page "/register"
+@using BlazorClient.Core.Services
+@inject IAuthService AuthService
+@inject NavigationManager Navigation
+@inject AuthenticationStateProvider AuthStateProvider
+@inject ILocalizationService L
+@implements IDisposable
+<MudContainer MaxWidth="MaxWidth.Small" Class="ic-auth-page">
+    <MudPaper Elevation="0" Class="ic-auth-card pa-8 bg-white">
+        <div class="ic-auth-brand"><span>i</span><strong>ideal<em>creative</em></strong></div>
+        <div class="text-center mb-8">
+            <MudText Typo="Typo.h4" Class="fw-bold mb-2">@L.Get("Auth.Register")</MudText>
+            <MudText Typo="Typo.body2" Class="ynex-text-muted">Crie sua conta para começar a comprar.</MudText>
+        </div>
+
+        @if (!string.IsNullOrEmpty(errorMessage))
+        {
+            <MudAlert Severity="Severity.Error" Variant="Variant.Filled" Class="mb-6 rounded-lg ynex-alert">
+                @errorMessage
+            </MudAlert>
+        }
+
+        <EditForm Model="@registerModel" OnValidSubmit="@HandleRegister">
+            <DataAnnotationsValidator />
+
+            <div class="mb-6">
+                <MudTextField @bind-Value="registerModel.DisplayName" 
+                              Label="@L.Get("Account.Profile")" 
+                              Variant="Variant.Outlined" 
+                              Placeholder="Seu nome"
+                              For="@(() => registerModel.DisplayName)"
+                              FullWidth="true"
+                              Class="mb-4" />
+
+                <MudTextField @bind-Value="registerModel.Email" 
+                              Label="@L.Get("Auth.Email")" 
+                              Variant="Variant.Outlined" 
+                              InputType="InputType.Email"
+                              Immediate="true"
+                              Placeholder="seu@email.com"
+                              For="@(() => registerModel.Email)"
+                              FullWidth="true"
+                              Class="mb-4" />
+
+                <MudTextField @bind-Value="registerModel.Password" 
+                              Label="@L.Get("Auth.Password")" 
+                              Variant="Variant.Outlined" 
+                              InputType="InputType.Password"
+                              Immediate="true"
+                              Placeholder="Use uma frase com pelo menos 15 caracteres"
+                              For="@(() => registerModel.Password)"
+                              FullWidth="true"
+                              Class="mb-4" />
+
+                <MudTextField @bind-Value="registerModel.ConfirmPassword" 
+                              Label="@L.Get("Account.ConfirmPassword")" 
+                              Variant="Variant.Outlined" 
+                              InputType="InputType.Password"
+                              Immediate="true"
+                              Placeholder="Digite a senha novamente"
+                              For="@(() => registerModel.ConfirmPassword)"
+                              FullWidth="true" />
+            </div>
+
+            <MudButton ButtonType="ButtonType.Submit" 
+                       Variant="Variant.Filled" 
+                       Color="Color.Primary" 
+                       FullWidth="true" 
+                       Class="py-3 rounded-xl fw-bold"
+                       Disabled="@isLoading">
+                @if (isLoading)
+                {
+                    <MudProgressCircular Class="ms-n1" Size="Size.Small" Indeterminate="true" />
+                    <MudText Class="ms-2">@L.Get("Auth.CreatingAccount")</MudText>
+                }
+                else
+                {
+                    @L.Get("Auth.CreateAccount")
+                }
+            </MudButton>
+        </EditForm>
+
+        <div class="text-center mt-8">
+            <MudText Typo="Typo.body2" Class="ynex-text-muted">
+                @L.Get("Auth.AlreadyHaveAccount") 
+                <MudLink href="/login" Underline="Underline.None" Color="Color.Primary" Class="fw-bold ml-1">
+                    @L.Get("Auth.Login")
+                </MudLink>
+            </MudText>
+        </div>
+        <div class="ic-auth-trust"><span><i class="icon-lock"></i> Cadastro seguro</span><span><i class="icon-check"></i> Histórico e downloads</span></div>
+    </MudPaper>
+</MudContainer>
+
+@code {
+    private RegistrationModel registerModel = new();
+    private bool isLoading = false;
+    private string? errorMessage;
+
+    protected override async Task OnInitializedAsync()
+    {
+        L.OnLanguageChanged += HandleLanguageChanged;
+
+        var authState = await AuthStateProvider.GetAuthenticationStateAsync();
+        var user = authState.User;
+
+        if (user.Identity?.IsAuthenticated == true)
+        {
+            Navigation.NavigateTo("/my-account");
+        }
+    }
+
+    private void HandleLanguageChanged()
+    {
+        InvokeAsync(StateHasChanged);
+    }
+
+    public void Dispose()
+    {
+        L.OnLanguageChanged -= HandleLanguageChanged;
+    }
+
+    private async Task HandleRegister()
+    {
+        if (registerModel.Password != registerModel.ConfirmPassword)
+        {
+            errorMessage = "As senhas não coincidem";
+            return;
+        }
+
+        isLoading = true;
+        errorMessage = null;
+
+        try
+        {
+            var result = await AuthService.RegisterWithEmail(
+                registerModel.Email,
+                registerModel.Password,
+                registerModel.DisplayName
+            );
+
+            if (result.Success)
+            {
+                await ((CustomAuthenticationStateProvider)AuthStateProvider).RefreshAuthenticationState();
+                Navigation.NavigateTo("/");
+            }
+            else
+            {
+                errorMessage = result.Error ?? "Erro ao criar conta";
+            }
+        }
+        catch (Exception ex)
+        {
+            errorMessage = $"Erro: {ex.Message}";
+        }
+        finally
+        {
+            isLoading = false;
+        }
+    }
+
+    public class RegistrationModel
+    {
+        [Required(ErrorMessage = "Nome é obrigatório")]
+        public string DisplayName { get; set; } = string.Empty;
+
+        [Required(ErrorMessage = "Email é obrigatório")]
+        [EmailAddress(ErrorMessage = "Email inválido")]
+        public string Email { get; set; } = string.Empty;
+
+        [Required(ErrorMessage = "Senha é obrigatória")]
+        [MinLength(15, ErrorMessage = "A senha deve ter no mínimo 15 caracteres")]
+        [MaxLength(128, ErrorMessage = "A senha deve ter no máximo 128 caracteres")]
+        public string Password { get; set; } = string.Empty;
+
+        [Required(ErrorMessage = "Confirmação de senha é obrigatória")]
+        public string ConfirmPassword { get; set; } = string.Empty;
+    }
+}

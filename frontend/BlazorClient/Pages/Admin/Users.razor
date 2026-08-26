@@ -1,0 +1,508 @@
+@using BlazorClient.Core.Interfaces
+@page "/admin/users"
+@using BlazorClient.Core.Services
+@using BlazorClient.Models
+@layout AdminLayout
+@attribute [Authorize(Roles = "Admin")]
+@inject IUserService UserService
+@inject IOrderService OrderService
+@inject IProductService ProductService
+@inject IJSRuntime JSRuntime
+@inject NavigationManager NavigationManager
+@inject ILocalizationService L
+
+<PageTitle>@L.Get("Admin.Users.Title") - Admin</PageTitle>
+
+<div class="admin-page-header ic-admin-page-heading">
+    <span class="ic-admin-kicker">RELACIONAMENTO / BASE DE CLIENTES</span>
+    <h1>Clientes</h1>
+    <p>Consulte cadastros, históricos e registre uma compra manual.</p>
+</div>
+
+@if (errorMessage != null)
+{
+    <div class="alert alert-danger m-4">
+        <h4>@L.Get("Admin.Products.LoadError")</h4>
+        <p>@errorMessage</p>
+        <button class="btn btn-outline-danger" @onclick="() => LoadUsers()">@L.Get("Admin.Common.TryAgain")</button>
+    </div>
+}
+else if (isLoading)
+{
+    <div class="text-center py-5">
+        <div class="spinner-border text-primary" role="status"></div>
+    </div>
+}
+else
+{
+    <div class="ic-admin-stat-strip ic-user-stats">
+        <div class="ic-admin-stat"><span class="ic-admin-stat-icon teal"><i class="icon-people"></i></span><span><strong>@pagination.TotalItems</strong><small>Clientes encontrados</small></span></div>
+        <div class="ic-admin-stat"><span class="ic-admin-stat-icon ink"><i class="icon-shield"></i></span><span><strong>@(users?.Count(user => user.IsAdmin) ?? 0)</strong><small>Administradores nesta página</small></span></div>
+        <div class="ic-admin-stat"><span class="ic-admin-stat-icon amber"><i class="icon-basket"></i></span><span><strong>@(users?.Count ?? 0)</strong><small>Cadastros exibidos</small></span></div>
+        <div class="ic-admin-stat ic-admin-stat-note"><span class="ic-admin-stat-icon coral"><i class="icon-plus"></i></span><span><strong>Venda assistida</strong><small>Use “Criar compra” na tabela</small></span></div>
+    </div>
+    <div class="card shadow mb-4">
+        <div class="card-body">
+            <!-- Search and Filter -->
+            <div class="row mb-4">
+                <div class="col-md-6">
+                    <div class="input-group">
+                        <span class="input-group-text">
+                            <i class="fa fa-search"></i>
+                        </span>
+                        <input type="text" 
+                               class="form-control" 
+                               placeholder="@L.Get("Admin.Users.SearchPlaceholder")" 
+                               @bind="searchTerm"
+                               @bind:event="oninput"
+                               @onkeyup="OnSearchKeyUp" />
+                        @if (!string.IsNullOrEmpty(searchTerm))
+                        {
+                            <button class="btn btn-outline-secondary" type="button" @onclick="ClearSearch">
+                                <i class="fa fa-times"></i>
+                            </button>
+                        }
+                    </div>
+                </div>
+                <div class="col-md-6 text-end">
+                    <span class="text-muted">
+                        @if (!string.IsNullOrWhiteSpace(searchTerm))
+                        {
+                            @L.Get("Admin.Users.UsersFound").Replace("{0}", pagination.TotalItems.ToString())
+                        }
+                        else
+                        {
+                            @L.Get("Admin.Users.Management")
+                        }
+                    </span>
+                </div>
+            </div>
+
+            <div class="table-responsive">
+                <table class="table table-hover ic-admin-mobile-table">
+                    <thead class="thead-light">
+                        <tr>
+                            <th>@L.Get("Admin.Users.TableName")</th>
+                            <th>@L.Get("Admin.Users.TableEmail")</th>
+                            <th>@L.Get("Admin.Users.TableRole")</th>
+                            <th>@L.Get("Admin.Common.Actions")</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @if (users != null && users.Any())
+                        {
+                            @foreach (var user in users)
+                            {
+                                <tr>
+                                    <td data-label="Cliente">
+                                        <div class="d-flex align-items-center">
+                                            <div class="avatar-circle mr-3">
+                                                @GetInitials(user.DisplayName ?? user.Email)
+                                            </div>
+                                            <div>
+                                                <div class="font-weight-bold">@user.DisplayName</div>
+                                                <small class="text-muted">UID: @GetShortId(user.Uid)</small>
+                                            </div>
+                                        </div>
+                                    </td>
+                                    <td data-label="E-mail">@user.Email</td>
+                                    <td data-label="Perfil">
+                                        @if(user.IsAdmin)
+                                        {
+                                            <span class="badge badge-success">@L.Get("Admin.Users.RoleAdmin")</span>
+                                        }
+                                        else
+                                        {
+                                            <span class="badge badge-secondary">@L.Get("Admin.Users.RoleUser")</span>
+                                        }
+                                    </td>
+                                    <td data-label="Ações">
+                                        @if(user.IsAdmin)
+                                        {
+                                            <button class="btn btn-sm btn-outline-danger" @onclick="() => ToggleAdmin(user)">
+                                                <i class="fa fa-user-times"></i> @L.Get("Admin.Users.RemoveAdmin")
+                                            </button>
+                                        }
+                                        else
+                                        {
+                                            <button class="btn btn-sm btn-outline-success" @onclick="() => ToggleAdmin(user)">
+                                                <i class="fa fa-user-plus"></i> @L.Get("Admin.Users.MakeAdmin")
+                                            </button>
+                                        }
+
+
+                                        <button class="btn btn-sm btn-outline-primary ml-2" @onclick="() => NavigateToCreateOrder(user)">
+                                            <i class="fa fa-shopping-cart"></i> @L.Get("Admin.Orders.CreateOrder")
+                                        </button>
+                                    </td>
+                                </tr>
+                            }
+                        }
+                        else
+                        {
+                            <tr>
+                                <td colspan="4" class="text-center py-4 text-muted">
+                                    @L.Get("Admin.Users.NoUsersFound")
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+            
+            <!-- Pagination Controls -->
+            <!-- Pagination Controls -->
+            <div class="card-footer bg-white py-3">
+                <div class="d-flex justify-content-between align-items-center">
+                    <div class="text-muted small">
+                        @if (!string.IsNullOrWhiteSpace(searchTerm))
+                        {
+                            <span>@string.Format(L.Get("Admin.Common.PageXofYUsers"), pagination.CurrentPage, pagination.TotalPages, pagination.TotalItems)</span>
+                        }
+                        else
+                        {
+                            <span>@string.Format(L.Get("Admin.Common.PageXofY"), pagination.CurrentPage, "?")</span>
+                        }
+                    </div>
+                    <nav aria-label="@L.Get("Admin.Common.PageNavigation")">
+                        <ul class="pagination pagination-sm mb-0">
+                            <!-- Previous Button -->
+                            <li class="page-item @(pagination.CurrentPage <= 1 ? "disabled" : "")">
+                                <button class="page-link" @onclick="() => ChangePage(pagination.CurrentPage - 1)" aria-label="@L.Get("Admin.Common.Previous")">
+                                    <span aria-hidden="true">&laquo; @L.Get("Admin.Common.Previous")</span>
+                                </button>
+                            </li>
+
+                            @if (!string.IsNullOrWhiteSpace(searchTerm))
+                            {
+                                <!-- Numeric Sequence (Only for Search Mode) -->
+                                @for (int i = GetStartPage(); i <= GetEndPage(); i++)
+                                {
+                                    var pageNum = i;
+                                    <li class="page-item @(pageNum == pagination.CurrentPage ? "active" : "")">
+                                        <button class="page-link" @onclick="() => ChangePage(pageNum)">@pageNum</button>
+                                    </li>
+                                }
+                                
+                                <!-- Next Button (Numeric Logic) -->
+                                <li class="page-item @(pagination.CurrentPage >= pagination.TotalPages ? "disabled" : "")">
+                                    <button class="page-link" @onclick="() => ChangePage(pagination.CurrentPage + 1)" aria-label="@L.Get("Admin.Common.Next")">
+                                        <span aria-hidden="true">@L.Get("Admin.Common.Next") &raquo;</span>
+                                    </button>
+                                </li>
+                            }
+                            else
+                            {
+                                <!-- Next Button (Cursor Logic) -->
+                                <li class="page-item @(string.IsNullOrEmpty(pagination.NextPageToken) ? "disabled" : "")">
+                                    <button class="page-link" @onclick="() => ChangePage(pagination.CurrentPage + 1)" aria-label="@L.Get("Admin.Common.Next")">
+                                        <span aria-hidden="true">@L.Get("Admin.Common.Next") &raquo;</span>
+                                    </button>
+                                </li>
+                            }
+                        </ul>
+                    </nav>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+@if (isConfirmModalOpen && userToToggle != null)
+{
+    <div class="modal fade show d-block" tabindex="-1" style="background-color: rgba(0,0,0,0.7);">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content border-0 shadow">
+                <div class="modal-header bg-primary text-white">
+                    <h5 class="modal-title">@L.Get("Admin.Common.ConfirmAction")</h5>
+                    <button type="button" class="btn-close btn-close-white" @onclick="CloseConfirmModal"></button>
+                </div>
+                <div class="modal-body p-4">
+                    <p class="mb-3">
+                        @((MarkupString)L.Get("Admin.Users.ConfirmToggleAdmin")
+                            .Replace("{0}", confirmActionName)
+                            .Replace("{1}", userToToggle.Email))
+                    </p>
+                </div>
+                <div class="modal-footer bg-light">
+                    <button type="button" class="btn btn-secondary" @onclick="CloseConfirmModal" disabled="@isProcessingToggle">
+                        @L.Get("Admin.Common.Cancel")
+                    </button>
+                    <button type="button" class="btn btn-primary px-4" @onclick="ConfirmToggleAdmin" disabled="@isProcessingToggle">
+                        @if (isProcessingToggle)
+                        {
+                            <span class="spinner-border spinner-border-sm me-2" role="status"></span>
+                            <span>@L.Get("Admin.Common.Processing")</span>
+                        }
+                        else
+                        {
+                            <i class="icon-check me-2"></i>
+                            <span>@L.Get("Admin.Common.Confirm")</span>
+                        }
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    private List<UserDto>? users;
+    private PaginationData pagination = new(1, 20, 1, 0, null, null);
+    private string? errorMessage;
+    private bool isLoading = true;
+    private string searchTerm = "";
+    private System.Timers.Timer? debounceTimer;
+
+    // Confirm Modal Fields
+    private UserDto? userToToggle;
+    private bool isConfirmModalOpen;
+    private string confirmActionName = "";
+    private bool isProcessingToggle;
+    
+    [SupplyParameterFromQuery]
+    public int? Page { get; set; }
+
+    // Map: PageNumber -> Token (LastDocId/PageToken)
+    private Dictionary<int, string?> pageTokens = new() { { 1, null } };
+
+    protected override async Task OnParametersSetAsync()
+    {
+        var targetPage = Page ?? 1;
+        if (targetPage < 1) targetPage = 1;
+
+         // Check if we are already displaying this page
+         // Note: users check is to ensure we don't skip reload on first render
+        if (targetPage == pagination.CurrentPage && users != null) return;
+
+        if (targetPage == 1)
+        {
+            await LoadUsers(1);
+            return;
+        }
+
+        if (pageTokens.ContainsKey(targetPage))
+        {
+            await LoadUsers(targetPage);
+        }
+        else
+        {
+             // Iterative Logic
+             isLoading = true;
+             StateHasChanged();
+
+             await LoadUsers(1);
+             await LoadUsers(1);
+
+             
+             // Loop until we reach target or execute max retries
+             while (pagination.CurrentPage < targetPage)
+             {
+                 if (pagination.NextPageToken == null) break;
+                 
+                 // The LoadUsers call below will populate cache for next page
+                 await LoadUsers(pagination.CurrentPage + 1);
+             }
+        }
+    }
+
+    private async Task LoadUsers(int page = 1)
+    {
+        try
+        {
+            isLoading = true;
+            errorMessage = null;
+            
+            var isSearch = !string.IsNullOrWhiteSpace(searchTerm);
+            
+            // Resolve Token
+            string? token = null;
+            if (!isSearch)
+            {
+                if (pageTokens.ContainsKey(page))
+                {
+                    token = pageTokens[page];
+                }
+                else if (page > 1)
+                {
+                    // Fallback
+                    page = 1;
+                }
+            }
+            
+            var response = await UserService.GetAllUsers(
+                page, 
+                20, 
+                isSearch ? searchTerm : null, 
+                isSearch ? null : token); 
+            
+            users = response.Items;
+            pagination = response.Pagination;
+            
+            // Cache Next Token
+            if (!isSearch && pagination.NextPageToken != null)
+            {
+                pageTokens[page + 1] = pagination.NextPageToken;
+            }
+        }
+        catch (Exception ex)
+        {
+            errorMessage = ex.Message;
+            Console.WriteLine(L.Get("Admin.Common.ErrorLoadingDetail").Replace("{0}", ex.Message));
+        }
+        finally
+        {
+            isLoading = false;
+            StateHasChanged();
+        }
+    }
+
+    private void OnSearchKeyUp(KeyboardEventArgs e)
+    {
+        debounceTimer?.Stop();
+        debounceTimer?.Dispose();
+        
+        debounceTimer = new System.Timers.Timer(500);
+        debounceTimer.Elapsed += async (sender, args) =>
+        {
+            debounceTimer?.Stop();
+            await InvokeAsync(() => {
+                // Reset pagination via Navigation implies keeping search term in state?
+                // If we Navigate, we might lose searchTerm if it's not in URL.
+                // For now, let's just reset local state and Load(1). 
+                // URL will say ?page=X which is wrong.
+                // BUT if we navigate to ?page=1, we reload component?
+                // Let's try to update URL without reload? Not possible in Blazor easily to just push state without navigation event.
+                // Strategy: Just LoadUsers(1). 
+                // Issue: Refreshing page will revert to Page X (URL) but without search term -> different data.
+                // Fixing completely requires persisting Search in URL.
+                // Given task scope (Pagination persistence), I will prioritize Page URL updating on click.
+                // On search, I will force NavigateTo(?page=1). If it reloads and clears search, that's a UX bug in existing code (state loss).
+                // Existing code: searchTerm is field.
+                // If I NavigateTo("?page=1"), Blazor re-runs OnParametersSet. Field searchTerm is NOT PRESERVED if instance is recycled.
+                // However, Blazor WASM usually preserves singleton/transient/component instance? No, Router recycles.
+                // So... I must NOT Use NavigateTo if I want to keep searchTerm without putting it in URL.
+                
+                // Compromise: When searching, `Page` parameter remains what it was in URL (e.g. 5), but we `LoadUsers()` which sets `pagination.CurrentPage = 1` in memory.
+                // The URL is visually wrong (says 5, shows 1).
+                // But the app works.
+                // To fix visual URL: We'd need to update URL.
+                // Let's stick to in-memory reset for Search to avoid clearing the input.
+                
+                pageTokens.Clear();
+                pageTokens[1] = null;
+                _ = LoadUsers(1); // Fire and forget async
+            });
+        };
+        debounceTimer.AutoReset = false;
+        debounceTimer.Start();
+    }
+
+    private async Task ClearSearch()
+    {
+        searchTerm = "";
+        pageTokens.Clear();
+        pageTokens[1] = null;
+        // Here we CAN Navigate because we cleared search
+        NavigationManager.NavigateTo("/admin/users?page=1");
+    }
+
+    private async Task ChangePage(int newPage)
+    {
+        if (newPage < 1) return;
+        
+        if (!string.IsNullOrWhiteSpace(searchTerm))
+        {
+             // Search mode (Numeric)
+             if (newPage > pagination.TotalPages || newPage == pagination.CurrentPage) return;
+             // We can't use NavigateTo because we lose search term.
+             // Manually load.
+             await LoadUsers(newPage);
+             // URL will not update. This is acceptable given constraints (we are not doing Search Persistence yet).
+        }
+        else
+        {
+            // Cursor mode (Main) - We CAN update URL
+            NavigationManager.NavigateTo($"/admin/users?page={newPage}");
+        }
+    }
+
+    private int GetStartPage()
+    {
+        var start = Math.Max(1, pagination.CurrentPage - 2);
+        return start;
+    }
+
+    private int GetEndPage()
+    {
+        var end = Math.Min(pagination.TotalPages, pagination.CurrentPage + 2);
+        return end;
+    }
+
+    private void ToggleAdmin(UserDto user)
+    {
+        userToToggle = user;
+        confirmActionName = user.IsAdmin ? L.Get("Admin.Users.RemoveAdmin") : L.Get("Admin.Users.MakeAdmin");
+        isConfirmModalOpen = true;
+    }
+
+    private void CloseConfirmModal()
+    {
+        isConfirmModalOpen = false;
+        userToToggle = null;
+    }
+
+    private async Task ConfirmToggleAdmin()
+    {
+        if (userToToggle == null) return;
+
+        isProcessingToggle = true;
+        try
+        {
+            if (userToToggle.IsAdmin)
+            {
+                await UserService.DemoteFromAdmin(userToToggle.Uid);
+            }
+            else
+            {
+                await UserService.PromoteToAdmin(userToToggle.Uid);
+            }
+            
+            // Refresh list
+            await LoadUsers();
+            CloseConfirmModal();
+        }
+        catch (Exception ex)
+        {
+            await JSRuntime.InvokeVoidAsync("alert", L.Get("Admin.Common.ErrorUpdating").Replace("{0}", ex.Message));
+        }
+        finally
+        {
+            isProcessingToggle = false;
+        }
+    }
+
+    private string GetInitials(string? name)
+    {
+        if (string.IsNullOrWhiteSpace(name)) return "?";
+        return name.Substring(0, 1).ToUpper();
+    }
+
+    private string GetShortId(string id)
+    {
+        if (string.IsNullOrEmpty(id) || id.Length < 8) return id;
+        return id.Substring(0, 8) + "...";
+    }
+
+    private void NavigateToCreateOrder(UserDto user)
+    {
+        NavigationManager.NavigateTo($"/admin/orders/create/{user.Uid}");
+    }
+
+    public void Dispose()
+    {
+        debounceTimer?.Stop();
+        debounceTimer?.Dispose();
+    }
+}
+

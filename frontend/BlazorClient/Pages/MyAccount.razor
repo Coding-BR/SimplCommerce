@@ -1,0 +1,221 @@
+@page "/my-account"
+@page "/my-account/{ActiveTab?}"
+@using BlazorClient.Core.Interfaces
+@using BlazorClient.Models
+@using Microsoft.AspNetCore.Authorization
+@attribute [Authorize]
+@inject IUserService UserService
+@inject IOrderService OrderService
+@inject IProductService ProductService
+@inject ILocalizationService L
+@inject NavigationManager Navigation
+@inject IJSRuntime JSRuntime
+@inject ISnackbar Snackbar
+@inject IAuthService AuthService
+@inject AuthenticationStateProvider AuthStateProvider
+
+<PageTitle>Minha conta | IdealCreative</PageTitle>
+
+<MudContainer MaxWidth="MaxWidth.Large" Class="account-page py-6 py-lg-10">
+    <div class="account-heading mb-6">
+        <MudText Typo="Typo.overline" Color="Color.Primary" Class="fw-bold">ÁREA DO CLIENTE</MudText>
+        <MudText Typo="Typo.h3" Class="fw-bold">Minha conta</MudText>
+        <MudText Typo="Typo.body1" Class="text-muted mt-1">Acompanhe seus pedidos, acesse arquivos digitais e mantenha seus dados atualizados.</MudText>
+    </div>
+
+    <div class="account-shell">
+        <nav class="account-nav" aria-label="Minha conta">
+            @foreach (var tab in Tabs)
+            {
+                <button type="button" class="account-nav-item @(CurrentTab == tab.Key ? "active" : null)" @onclick="() => GoToTab(tab.Key)">
+                    <MudIcon Icon="@tab.Icon" /><span>@tab.Label</span>
+                    @if (tab.Key == "orders" && pagination.TotalItems > 0) { <small>@pagination.TotalItems</small> }
+                </button>
+            }
+        </nav>
+
+        <main class="account-content">
+            @if (CurrentTab == "orders")
+            {
+                <div class="section-heading"><div><MudText Typo="Typo.h5" Class="fw-bold">Histórico de compras</MudText><MudText Typo="Typo.body2" Class="text-muted">Seus pedidos mais recentes e o andamento de cada um.</MudText></div><MudButton Variant="Variant.Outlined" Color="Color.Primary" Href="/shop" Class="rounded-pill">Continuar comprando</MudButton></div>
+                @if (loadingOrders) { <MudProgressLinear Indeterminate="true" Rounded="true" Class="mt-6" /> }
+                else if (orders.Count == 0) { <div class="account-empty"><MudIcon Icon="@Icons.Material.Outlined.ShoppingBag" Size="Size.Large" /><MudText Typo="Typo.h6" Class="fw-bold">Você ainda não fez pedidos</MudText><MudText Typo="Typo.body2" Class="text-muted">Quando sua primeira compra for feita, ela aparecerá aqui.</MudText><MudButton Variant="Variant.Filled" Color="Color.Primary" Href="/shop" Class="mt-4 rounded-pill">Ver produtos</MudButton></div> }
+                else
+                {
+                    <div class="order-list">
+                        @foreach (var order in orders)
+                        {
+                            <article class="account-order">
+                                <header><span><small>Pedido</small><strong>#@ShortId(order.Id)</strong></span><span><small>Realizado em</small><strong>@order.CreatedAt?.ToLocalTime().ToString("dd/MM/yyyy")</strong></span><span><small>Total</small><strong>@L.FormatCurrency((decimal)order.Total)</strong></span><MudChip T="string" Size="Size.Small" Color="@StatusColor(order.Status)" Variant="Variant.Outlined">@StatusLabel(order.Status)</MudChip></header>
+                                <div class="order-products">
+                                    @foreach (var item in order.Items)
+                                    {
+                                        <div class="order-product"><div class="product-thumb">@if (!string.IsNullOrWhiteSpace(item.ProductImage)) { <img src="@item.ProductImage" alt="" /> } else { <MudIcon Icon="@Icons.Material.Outlined.Inventory2" /> }</div><span><strong>@item.ProductTitle</strong><small>@item.Quantity unidade(s) @(item.IsDigital ? "· Produto digital" : "")</small></span><strong>@L.FormatCurrency((decimal)item.TotalPrice)</strong></div>
+                                    }
+                                </div>
+                                @if (!string.IsNullOrWhiteSpace(order.CouponCode)) { <footer><MudIcon Icon="@Icons.Material.Outlined.LocalOffer" Size="Size.Small" /> Cupom @order.CouponCode · desconto de @L.FormatCurrency((decimal)order.DiscountAmount)</footer> }
+                            </article>
+                        }
+                    </div>
+                    @if (pagination.TotalPages > 1) { <MudPagination Count="@pagination.TotalPages" Selected="@pagination.CurrentPage" SelectedChanged="LoadOrders" Color="Color.Primary" Class="mt-5" /> }
+                }
+            }
+            else if (CurrentTab == "downloads")
+            {
+                <div class="section-heading"><div><MudText Typo="Typo.h5" Class="fw-bold">Meus downloads</MudText><MudText Typo="Typo.body2" Class="text-muted">Arquivos digitais liberados após a confirmação do pagamento.</MudText></div></div>
+                @if (loadingDownloads) { <MudProgressLinear Indeterminate="true" Rounded="true" Class="mt-6" /> }
+                else if (downloads.Count == 0) { <div class="account-empty"><MudIcon Icon="@Icons.Material.Outlined.CloudDownload" Size="Size.Large" /><MudText Typo="Typo.h6" Class="fw-bold">Nenhum arquivo disponível</MudText><MudText Typo="Typo.body2" Class="text-muted">Produtos digitais pagos e visíveis ao cliente aparecerão aqui.</MudText><MudButton Variant="Variant.Filled" Color="Color.Primary" Href="/shop" Class="mt-4 rounded-pill">Explorar produtos</MudButton></div> }
+                else
+                {
+                    <div class="download-grid">
+                        @foreach (var item in downloads)
+                        {
+                            <article class="download-card"><div class="download-cover">@if (!string.IsNullOrWhiteSpace(item.ProductImage)) { <img src="@item.ProductImage" alt="" /> } else { <MudIcon Icon="@Icons.Material.Outlined.Description" Size="Size.Large" /> }</div><div><MudText Typo="Typo.h6" Class="fw-bold">@item.ProductTitle</MudText><MudText Typo="Typo.caption" Class="text-muted">Comprado em @item.PurchaseDate.ToLocalTime().ToString("dd/MM/yyyy")</MudText><MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Download" Disabled="@downloading.Contains(item.ProductId)" OnClick="() => Download(item.ProductId)" FullWidth="true" Class="mt-4 rounded-pill">@(downloading.Contains(item.ProductId) ? "Preparando..." : "Baixar arquivo")</MudButton></div></article>
+                        }
+                    </div>
+                }
+            }
+            else if (CurrentTab == "profile")
+            {
+                <div class="section-heading"><div><MudText Typo="Typo.h5" Class="fw-bold">Dados pessoais</MudText><MudText Typo="Typo.body2" Class="text-muted">Usamos estes dados para identificar e entregar seus pedidos.</MudText></div></div>
+                @if (loadingProfile) { <MudProgressLinear Indeterminate="true" Rounded="true" Class="mt-6" /> }
+                else
+                {
+                    <MudForm @ref="profileForm" Model="profile">
+                        <MudGrid Spacing="3" Class="mt-2">
+                            <MudItem xs="12" md="7"><MudTextField @bind-Value="profile.DisplayName" Label="Nome completo" Variant="Variant.Outlined" Required="true" /></MudItem>
+                            <MudItem xs="12" md="5"><MudTextField Value="@profile.Email" Label="E-mail" Variant="Variant.Outlined" Disabled="true" /></MudItem>
+                            <MudItem xs="12" md="6"><MudTextField @bind-Value="profile.PhoneNumber" Label="Telefone" Variant="Variant.Outlined" /></MudItem>
+                            <MudItem xs="12" md="6"><MudTextField @bind-Value="profile.CustomerDocument" Label="CPF ou documento" Variant="Variant.Outlined" /></MudItem>
+                            <MudItem xs="12"><MudDivider Class="my-2" /><MudText Typo="Typo.subtitle1" Class="fw-bold mt-2">Endereço principal</MudText></MudItem>
+                            <MudItem xs="12" md="4"><MudTextField @bind-Value="profile.ZipCode" Label="CEP" Variant="Variant.Outlined" /></MudItem>
+                            <MudItem xs="12" md="6"><MudTextField @bind-Value="profile.Street" Label="Rua" Variant="Variant.Outlined" /></MudItem>
+                            <MudItem xs="12" md="2"><MudTextField @bind-Value="profile.Number" Label="Número" Variant="Variant.Outlined" /></MudItem>
+                            <MudItem xs="12" md="5"><MudTextField @bind-Value="profile.Neighborhood" Label="Bairro" Variant="Variant.Outlined" /></MudItem>
+                            <MudItem xs="12" md="5"><MudTextField @bind-Value="profile.City" Label="Cidade" Variant="Variant.Outlined" /></MudItem>
+                            <MudItem xs="12" md="2"><MudTextField @bind-Value="profile.State" Label="UF" Variant="Variant.Outlined" /></MudItem>
+                            <MudItem xs="12" Class="d-flex justify-end"><MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Save" Disabled="@savingProfile" OnClick="SaveProfile" Class="rounded-pill px-7">@(savingProfile ? "Salvando..." : "Salvar alterações")</MudButton></MudItem>
+                        </MudGrid>
+                    </MudForm>
+                }
+            }
+            else
+            {
+                <div class="section-heading"><div><MudText Typo="Typo.h5" Class="fw-bold">Privacidade e conta</MudText><MudText Typo="Typo.body2" Class="text-muted">Encerre seu acesso e solicite a exclusão dos dados elegíveis.</MudText></div></div>
+                @if (loadingPrivacy) { <MudProgressLinear Indeterminate="true" Rounded="true" Class="mt-6" /> }
+                else if (deletionPreview is null) { <div class="account-empty"><MudIcon Icon="@Icons.Material.Outlined.PrivacyTip" Size="Size.Large" /><MudText Typo="Typo.h6" Class="fw-bold">Não foi possível carregar as opções de privacidade</MudText><MudButton Variant="Variant.Outlined" Color="Color.Primary" OnClick="LoadPrivacy" Class="mt-4 rounded-pill">Tentar novamente</MudButton></div> }
+                else
+                {
+                    <section class="privacy-panel mt-5">
+                        <div class="privacy-icon"><MudIcon Icon="@Icons.Material.Outlined.DeleteForever" Size="Size.Large" /></div>
+                        <div><MudText Typo="Typo.h6" Class="fw-bold">Excluir conta</MudText><MudText Typo="Typo.body2" Class="text-muted">@deletionPreview.Notice</MudText></div>
+                    </section>
+                    @if (deletionPreview.BlockingOrders.Count > 0)
+                    {
+                        <MudAlert Severity="Severity.Warning" Variant="Variant.Outlined" Class="mt-4">A anonimização final aguarda estes pedidos em andamento: @string.Join(", ", deletionPreview.BlockingOrders.Select(order => $"#{ShortId(order.OrderId)} · {StatusLabel(order.Status)}"))</MudAlert>
+                    }
+                    <div class="privacy-summary mt-4">
+                        <div><MudText Typo="Typo.subtitle2" Class="fw-bold">Removido agora</MudText><ul>@foreach (var item in deletionPreview.DataRemovedNow) { <li>@item</li> }</ul></div>
+                        <div><MudText Typo="Typo.subtitle2" Class="fw-bold">Mantido somente quando necessário</MudText><ul>@foreach (var item in deletionPreview.DataRetained) { <li>@item</li> }</ul></div>
+                    </div>
+                    <MudDivider Class="my-5" />
+                    <MudText Typo="Typo.subtitle2" Class="fw-bold">Confirme sua senha para continuar</MudText>
+                    <MudText Typo="Typo.caption" Class="text-muted d-block mb-3">Esta ação encerra o acesso imediatamente. Produtos digitais e histórico deixarão de ficar disponíveis pela conta.</MudText>
+                    <MudTextField @bind-Value="currentPassword" Label="Senha atual" InputType="InputType.Password" Variant="Variant.Outlined" FullWidth="true" Class="privacy-password" />
+                    <MudButton Variant="Variant.Filled" Color="Color.Error" StartIcon="@Icons.Material.Outlined.DeleteForever" Disabled="@(deleting || string.IsNullOrWhiteSpace(currentPassword))" OnClick="RequestAccountDeletion" Class="mt-4 rounded-pill px-7">@(deleting ? "Encerrando acesso..." : "Excluir minha conta")</MudButton>
+                }
+            }
+        </main>
+    </div>
+</MudContainer>
+
+@code {
+    [Parameter] public string? ActiveTab { get; set; }
+    private readonly (string Key, string Label, string Icon)[] Tabs = [("orders", "Pedidos", Icons.Material.Outlined.ReceiptLong), ("downloads", "Downloads", Icons.Material.Outlined.CloudDownload), ("profile", "Perfil", Icons.Material.Outlined.Person), ("privacy", "Privacidade", Icons.Material.Outlined.PrivacyTip)];
+    private string CurrentTab => ActiveTab?.ToLowerInvariant() is "downloads" or "profile" or "privacy" ? ActiveTab.ToLowerInvariant() : "orders";
+    private List<Order> orders = [];
+    private List<DigitalPurchaseInfo> downloads = [];
+    private PaginationData pagination = new() { CurrentPage = 1, PageSize = 10, TotalPages = 1 };
+    private UserProfile profile = new();
+    private MudForm? profileForm;
+    private readonly HashSet<string> downloading = [];
+    private AccountDeletionPreview? deletionPreview;
+    private string currentPassword = string.Empty;
+    private bool loadingOrders = true, loadingDownloads = true, loadingProfile = true, loadingPrivacy = true, savingProfile, deleting;
+
+    protected override async Task OnInitializedAsync() => await Task.WhenAll(LoadOrders(1), LoadDownloads(), LoadProfile(), LoadPrivacy());
+    private void GoToTab(string tab) => Navigation.NavigateTo($"/my-account/{tab}");
+    private async Task LoadOrders(int page) { loadingOrders = true; var response = await OrderService.GetMyOrders(page, 10); orders = response.Items; pagination = response.Pagination; loadingOrders = false; }
+    private async Task LoadDownloads() { loadingDownloads = true; var response = await ProductService.GetMyDownloadsAsync(); downloads = response.Items; loadingDownloads = false; }
+    private async Task LoadProfile() { loadingProfile = true; profile = await UserService.GetProfileAsync() ?? new UserProfile(); loadingProfile = false; }
+    private async Task SaveProfile()
+    {
+        if (profileForm is null) return; await profileForm.Validate(); if (!profileForm.IsValid) return;
+        savingProfile = true; var updated = await UserService.UpdateProfileAsync(profile); savingProfile = false;
+        if (updated is null) Snackbar.Add("Não foi possível salvar seus dados.", Severity.Error); else { profile = updated; Snackbar.Add("Dados atualizados com sucesso.", Severity.Success); }
+    }
+    private async Task LoadPrivacy()
+    {
+        loadingPrivacy = true;
+        deletionPreview = await UserService.GetAccountDeletionPreviewAsync();
+        loadingPrivacy = false;
+    }
+    private async Task RequestAccountDeletion()
+    {
+        deleting = true;
+        var result = await UserService.RequestAccountDeletionAsync(currentPassword);
+        deleting = false;
+        if (!result.Success) { Snackbar.Add(result.Message, Severity.Error); return; }
+        await AuthService.SignOut();
+        await ((CustomAuthenticationStateProvider)AuthStateProvider).RefreshAuthenticationState();
+        Snackbar.Add(result.Message, Severity.Success);
+        Navigation.NavigateTo("/", true);
+    }
+    private async Task Download(string productId)
+    {
+        downloading.Add(productId);
+        try { var link = await ProductService.GetDownloadLinkAsync(productId); if (!string.IsNullOrWhiteSpace(link?.DownloadUrl)) await JSRuntime.InvokeVoidAsync("open", link.DownloadUrl, "_blank"); else Snackbar.Add("Arquivo indisponível.", Severity.Warning); }
+        catch { Snackbar.Add("Não foi possível gerar o download.", Severity.Error); }
+        finally { downloading.Remove(productId); }
+    }
+    private static string ShortId(string id) => id[..Math.Min(8, id.Length)].ToUpperInvariant();
+    private static Color StatusColor(string? status) => status?.ToLowerInvariant() switch { "paid" or "delivered" => Color.Success, "processing" or "shipped" => Color.Info, "cancelled" => Color.Error, _ => Color.Warning };
+    private static string StatusLabel(string? status) => status?.ToLowerInvariant() switch { "pending" => "Pendente", "awaitingpayment" => "Aguardando pagamento", "paid" => "Pago", "processing" => "Em produção", "shipped" => "Enviado", "delivered" => "Concluído", "cancelled" => "Cancelado", _ => status ?? "Pendente" };
+}
+
+<style>
+    .account-shell { display:grid; grid-template-columns:230px minmax(0,1fr); gap:1.5rem; align-items:start; }
+    .account-nav, .account-content { background:var(--mud-palette-surface); border:1px solid var(--mud-palette-lines-default); border-radius:22px; box-shadow:0 16px 40px rgba(21,33,48,.06); }
+    .account-nav { padding:.65rem; display:grid; gap:.3rem; position:sticky; top:92px; }
+    .account-nav-item { display:grid; grid-template-columns:26px 1fr auto; align-items:center; gap:.7rem; width:100%; padding:.85rem .9rem; border:0; border-radius:14px; color:var(--mud-palette-text-secondary); background:transparent; text-align:left; font-weight:700; transition:.18s ease; }
+    .account-nav-item:hover, .account-nav-item.active { color:var(--mud-palette-primary); background:color-mix(in srgb,var(--mud-palette-primary) 9%,transparent); }
+    .account-nav-item small { min-width:24px; padding:.1rem .4rem; border-radius:999px; text-align:center; background:color-mix(in srgb,var(--mud-palette-primary) 12%,transparent); }
+    .account-content { padding:1.5rem; min-height:520px; }
+    .section-heading { display:flex; align-items:center; justify-content:space-between; gap:1rem; padding-bottom:1.25rem; border-bottom:1px solid var(--mud-palette-lines-default); }
+    .account-empty { min-height:360px; display:flex; flex-direction:column; align-items:center; justify-content:center; text-align:center; color:var(--mud-palette-primary); }
+    .account-empty .mud-typography { color:var(--mud-palette-text-primary); }
+    .order-list { display:grid; gap:1rem; margin-top:1.25rem; }
+    .account-order { border:1px solid var(--mud-palette-lines-default); border-radius:18px; overflow:hidden; }
+    .account-order header { display:grid; grid-template-columns:repeat(3,1fr) auto; gap:1rem; align-items:center; padding:1rem 1.2rem; background:color-mix(in srgb,var(--mud-palette-primary) 4%,var(--mud-palette-surface)); }
+    .account-order header small, .account-order header strong { display:block; }
+    .account-order header small, .order-product small { color:var(--mud-palette-text-secondary); }
+    .order-products { padding:.4rem 1.2rem; }
+    .order-product { display:grid; grid-template-columns:48px 1fr auto; align-items:center; gap:.9rem; padding:.8rem 0; }
+    .product-thumb { width:48px; height:48px; display:grid; place-items:center; overflow:hidden; border-radius:12px; background:var(--mud-palette-background); }
+    .product-thumb img { width:100%; height:100%; object-fit:cover; }
+    .order-product span strong, .order-product span small { display:block; }
+    .account-order footer { display:flex; align-items:center; gap:.4rem; padding:.8rem 1.2rem; font-size:.85rem; color:var(--mud-palette-text-secondary); border-top:1px solid var(--mud-palette-lines-default); }
+    .download-grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:1rem; margin-top:1.25rem; }
+    .download-card { display:grid; grid-template-columns:120px 1fr; gap:1rem; padding:1rem; align-items:center; border:1px solid var(--mud-palette-lines-default); border-radius:18px; }
+    .download-cover { height:120px; display:grid; place-items:center; border-radius:14px; overflow:hidden; background:var(--mud-palette-background); color:var(--mud-palette-primary); }
+    .download-cover img { width:100%; height:100%; object-fit:cover; }
+    .privacy-panel { display:grid; grid-template-columns:auto 1fr; align-items:center; gap:1rem; padding:1.25rem; border:1px solid color-mix(in srgb,var(--mud-palette-error) 28%,var(--mud-palette-lines-default)); border-radius:18px; background:color-mix(in srgb,var(--mud-palette-error) 5%,var(--mud-palette-surface)); }
+    .privacy-icon { width:52px; height:52px; display:grid; place-items:center; border-radius:16px; color:var(--mud-palette-error); background:color-mix(in srgb,var(--mud-palette-error) 12%,transparent); }
+    .privacy-summary { display:grid; grid-template-columns:1fr 1fr; gap:1rem; }
+    .privacy-summary > div { padding:1rem; border:1px solid var(--mud-palette-lines-default); border-radius:14px; }
+    .privacy-summary ul { margin:.65rem 0 0; padding-left:1.1rem; color:var(--mud-palette-text-secondary); font-size:.84rem; }
+    .privacy-summary li + li { margin-top:.3rem; }
+    .privacy-password { max-width:420px; }
+    @@media (max-width:800px) { .account-shell { grid-template-columns:1fr; } .account-nav { position:static; display:flex; overflow:auto; } .account-nav-item { min-width:max-content; grid-template-columns:24px auto auto; } .account-content { padding:1rem; } .account-order header { grid-template-columns:1fr 1fr; } .download-grid, .privacy-summary { grid-template-columns:1fr; } }
+    @@media (max-width:520px) { .section-heading { align-items:stretch; flex-direction:column; } .account-order header { grid-template-columns:1fr auto; } .account-order header span:nth-child(2) { display:none; } .order-product { grid-template-columns:44px 1fr; } .order-product > strong { grid-column:2; } .download-card { grid-template-columns:88px 1fr; } .download-cover { height:88px; } }
+</style>

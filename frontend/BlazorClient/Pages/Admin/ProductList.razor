@@ -1,0 +1,431 @@
+@using BlazorClient.Core.Interfaces
+@page "/admin/products"
+@using BlazorClient.Models
+@using BlazorClient.Core.Services
+@implements IDisposable
+@inject IProductService ProductService
+@inject NavigationManager Navigation
+@inject ILocalizationService L
+@inject IJSRuntime JSRuntime
+@inject IDialogService DialogService
+@inject ISnackbar Snackbar
+@layout AdminLayout
+
+<PageTitle>@L.Get("Admin.Products.Title") - Admin</PageTitle>
+
+<MudContainer MaxWidth="MaxWidth.False" Class="pa-0">
+    <div class="ic-admin-view-header">
+        <div>
+            <span class="ic-admin-kicker">Catálogo / Gestão</span>
+            <MudText Typo="Typo.h1">@L.Get("Admin.Products.Title")</MudText>
+            <MudText Typo="Typo.body2">@L.Get("Admin.Products.Subtitle")</MudText>
+        </div>
+        <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Add" Href="/admin/products/new" Class="ic-admin-primary-action">
+            @L.Get("Admin.Products.NewProduct")
+        </MudButton>
+    </div>
+
+    <div class="ic-admin-stat-strip">
+        <div class="ic-admin-stat"><span class="ic-admin-stat-icon teal"><i class="icon-grid"></i></span><span><strong>@products.Count</strong><small>Na página atual</small></span></div>
+        <div class="ic-admin-stat"><span class="ic-admin-stat-icon coral"><i class="icon-cloud-download"></i></span><span><strong>@products.Count(p => p.IsDigital)</strong><small>Produtos digitais</small></span></div>
+        <div class="ic-admin-stat"><span class="ic-admin-stat-icon amber"><i class="icon-exclamation"></i></span><span><strong>@products.Count(p => !p.IsDigital && p.Qty <= 0)</strong><small>Sem estoque</small></span></div>
+        <div class="ic-admin-stat ic-admin-stat-note"><span class="ic-admin-stat-icon ink"><i class="icon-refresh"></i></span><span><strong>Atualizado</strong><small>Sincronização automática</small></span></div>
+    </div>
+
+    <!-- Filters -->
+    <MudPaper Class="ic-admin-filter-panel mb-6" Elevation="0">
+        <div class="ic-filter-heading"><div><span class="ic-admin-kicker">Encontrar rapidamente</span><strong>Filtros do catálogo</strong></div><MudButton Variant="Variant.Text" Class="ic-filter-clear" OnClick="ClearFilters">Limpar filtros</MudButton></div>
+        <MudGrid Class="align-center" Spacing="2">
+             <MudItem xs="12" sm="6" md="3">
+                <MudTextField @bind-Value="SearchTerm" 
+                              Placeholder="@L.Get("Shop.InstantSearchPlaceholder")"
+                              Adornment="Adornment.Start" 
+                              AdornmentIcon="@Icons.Material.Filled.Search" 
+                              IconSize="Size.Medium" 
+                              Immediate="true"
+                              Variant="Variant.Outlined"
+                              Margin="Margin.Dense"
+                              Clearable="true" />
+             </MudItem>
+             <MudItem xs="12" sm="6" md="3">
+                <MudSelect T="string" Label="@L.Get("Admin.Products.AllCategories")" Value="selectedCategoryId" ValueChanged="OnCategoryChanged" Clearable="true" Variant="Variant.Outlined" Margin="Margin.Dense" AnchorOrigin="Origin.BottomCenter">
+                    <MudSelectItem T="string" Value="@(null)">@L.Get("Admin.Products.AllCategories")</MudSelectItem>
+                    @foreach (var category in categories)
+                    {
+                        <MudSelectItem Value="@category.Id">@category.GetTranslatedTitle(L.CurrentLanguage)</MudSelectItem>
+                    }
+                </MudSelect>
+             </MudItem>
+             <MudItem xs="6" sm="6" md="2">
+                 <MudSelect T="string" Label="@L.Get("Admin.Products.AllTags")" Value="selectedTag" ValueChanged="OnTagChanged" Clearable="true" Variant="Variant.Outlined" Margin="Margin.Dense" AnchorOrigin="Origin.BottomCenter">
+                    <MudSelectItem T="string" Value="@(null)">@L.Get("Admin.Products.AllTags")</MudSelectItem>
+                    @foreach (var tag in tags)
+                    {
+                        <MudSelectItem Value="@tag.Title">@tag.GetTranslatedTitle(L.CurrentLanguage)</MudSelectItem>
+                    }
+                </MudSelect>
+             </MudItem>
+             <MudItem xs="6" sm="6" md="2">
+                  <MudSelect T="string" Label="@L.Get("Admin.Products.AllTypes")" Value="selectedType" ValueChanged="OnTypeChanged" Clearable="true" Variant="Variant.Outlined" Margin="Margin.Dense" AnchorOrigin="Origin.BottomCenter">
+                    <MudSelectItem T="string" Value="@(null)">@L.Get("Admin.Products.AllTypes")</MudSelectItem>
+                    <MudSelectItem Value="@("Physical")">@L.Get("Admin.Products.Physical")</MudSelectItem>
+                    <MudSelectItem Value="@("Digital")">@L.Get("Admin.Products.Digital")</MudSelectItem>
+                </MudSelect>
+             </MudItem>
+             <MudItem xs="6" sm="6" md="2">
+                 <MudSelect T="string" Label="@L.Get("Admin.Products.AnyStock")" ValueChanged="OnStockStatusMudChanged" Clearable="true" Variant="Variant.Outlined" Margin="Margin.Dense" AnchorOrigin="Origin.BottomCenter">
+                    <MudSelectItem T="string" Value="@(null)">@L.Get("Admin.Products.AnyStock")</MudSelectItem>
+                    <MudSelectItem Value="@("OutOfStock")">@L.Get("Admin.Products.OutOfStock")</MudSelectItem>
+                </MudSelect>
+             </MudItem>
+        </MudGrid>
+        
+    </MudPaper>
+
+    @if (isLoading && products == null)
+    {
+         <div class="d-flex flex-column gap-3">
+             <MudSkeleton Height="60px" />
+             <MudSkeleton Height="60px" />
+             <MudSkeleton Height="60px" />
+         </div>
+    }
+    else if (!string.IsNullOrEmpty(errorMessage))
+    {
+        <MudAlert Severity="Severity.Error" Variant="Variant.Filled" Class="my-4" content-class="d-flex align-center justify-space-between w-100">
+            @errorMessage
+            <MudButton Variant="Variant.Filled" Color="Color.Inherit" Size="Size.Small" OnClick="LoadProducts" Class="ml-4">
+                @L.Get("Admin.Common.TryAgain")
+            </MudButton>
+        </MudAlert>
+    }
+    else
+    {
+        <div class="ic-admin-table-shell">
+        <div class="ic-table-caption"><strong>Produtos cadastrados</strong><span>@products.Count item(ns) nesta página</span></div>
+        <MudTable Items="@products" Hover="true" Breakpoint="Breakpoint.Sm" Loading="@isLoading" LoadingProgressColor="Color.Primary" Elevation="0" Class="ic-admin-products-table">
+            <HeaderContent>
+                <MudTh>@L.Get("Admin.Products.TableImage")</MudTh>
+                <MudTh>Type</MudTh>
+                <MudTh>@L.Get("Admin.Products.TableName")</MudTh>
+                <MudTh>@L.Get("Admin.Products.TablePrice")</MudTh>
+                <MudTh>@L.Get("Admin.Products.TableStock")</MudTh>
+                <MudTh Style="text-align:right">@L.Get("Admin.Products.TableActions")</MudTh>
+            </HeaderContent>
+            <RowTemplate>
+                <MudTd DataLabel="@L.Get("Admin.Products.TableImage")">
+                     <MudPaper Elevation="0" Class="rounded-lg overflow-hidden" Width="50px" Height="50px">
+                        @if (!string.IsNullOrEmpty(context.ImageName))
+                        {
+                            <MudImage Src="@context.ImageName" Alt="@context.Title" ObjectFit="ObjectFit.Cover" Width="50" Height="50"/>
+                        }
+                        else
+                        {
+                            <div class="d-flex justify-center align-center h-100 bg-gray-100">
+                                <MudIcon Icon="@Icons.Material.Filled.Image" Color="Color.Default" />
+                            </div>
+                        }
+                    </MudPaper>
+                </MudTd>
+                 <MudTd DataLabel="Type">
+                    @if (context.IsDigital)
+                    {
+                        <MudChip T="string" Color="Color.Success" Size="Size.Small" Variant="Variant.Text" Icon="@Icons.Material.Filled.CloudDownload">@L.Get("Admin.Products.Digital")</MudChip>
+                    }
+                    else
+                    {
+                         <MudChip T="string" Color="Color.Secondary" Size="Size.Small" Variant="Variant.Text" Icon="@Icons.Material.Filled.Inventory2">@L.Get("Admin.Products.Physical")</MudChip>
+                    }
+                </MudTd>
+                <MudTd DataLabel="@L.Get("Admin.Products.TableName")">
+                    <MudText Typo="Typo.body2" Class="fw-bold">@GetTranslatedTitle(context)</MudText>
+                    <MudText Typo="Typo.caption" Class="text-muted text-truncate" Style="max-width: 200px; display: block;">@GetTranslatedDescription(context)</MudText>
+                </MudTd>
+                <MudTd DataLabel="@L.Get("Admin.Products.TablePrice")">
+                    <MudText Color="Color.Success" Typo="Typo.body2" Class="fw-bold">@L.FormatCurrency(context.Price)</MudText>
+                </MudTd>
+                <MudTd DataLabel="@L.Get("Admin.Products.TableStock")">
+                     <MudChip T="string" Color="@(context.Qty > 0 ? Color.Success : Color.Error)" Size="Size.Small" Variant="Variant.Filled" Class="rounded">
+                         @context.Qty
+                     </MudChip>
+                </MudTd>
+                <MudTd DataLabel="@L.Get("Admin.Products.TableActions")" Style="text-align:right">
+                    <MudTooltip Text="Editar">
+                        <MudIconButton Icon="@Icons.Material.Filled.Edit" Color="Color.Default" Size="Size.Small" Href="@($"/admin/products/edit/{context.Id}?returnPage={currentPage}")" />
+                    </MudTooltip>
+                    <MudTooltip Text="Excluir">
+                        <MudIconButton Icon="@Icons.Material.Filled.Delete" Color="Color.Error" Size="Size.Small" OnClick="@(() => ConfirmDeleteDialog(context))" />
+                    </MudTooltip>
+                </MudTd>
+            </RowTemplate>
+            <PagerContent>
+                <div class="d-flex justify-end my-4 gap-2 align-center">
+                    <MudButton Disabled="@(currentPage == 1)" OnClick="PreviousPage" Variant="Variant.Outlined" Size="Size.Small" StartIcon="@Icons.Material.Filled.ChevronLeft">
+                        @L.Get("Admin.Common.Previous")
+                    </MudButton>
+                    <MudText Typo="Typo.caption" Class="mx-2">
+                         @L.Get("Admin.Common.PageOf").Replace("{0}", currentPage.ToString()).Replace("{1}", totalPages.ToString())
+                    </MudText>
+                    <MudButton Disabled="@(currentPage == totalPages)" OnClick="NextPage" Variant="Variant.Outlined" Size="Size.Small" EndIcon="@Icons.Material.Filled.ChevronRight">
+                         @L.Get("Admin.Common.Next")
+                    </MudButton>
+                </div>
+            </PagerContent>
+        </MudTable>
+        </div>
+    }
+</MudContainer>
+
+@code {
+    [SupplyParameterFromQuery]
+    public int? Page { get; set; }
+
+    private List<Product> products = new();
+    private int currentPage = 1;
+    private int totalPages = 1;
+    private bool isLoading = true;
+    
+    // Cursor state
+    private Dictionary<int, string?> pageCursors = new();
+
+    private string errorMessage = string.Empty;
+
+    // Filters
+    private List<Category> categories = new();
+    private List<Tag> tags = new();
+    
+    private string? selectedCategoryId;
+    private string? selectedTag;
+    private string? selectedType;
+    private bool? selectedStockStatus = null;
+    private string _searchTerm = "";
+    private string SearchTerm 
+    { 
+        get => _searchTerm; 
+        set 
+        {
+            if (_searchTerm != value)
+            {
+                _searchTerm = value;
+                _debounceTimer?.Stop();
+                _debounceTimer?.Start();
+            }
+        }
+    }
+    
+    private System.Timers.Timer? _debounceTimer;
+
+    private void ClearFilters()
+    {
+        _searchTerm = string.Empty;
+        selectedCategoryId = null;
+        selectedTag = null;
+        selectedType = null;
+        selectedStockStatus = null;
+        pageCursors.Clear();
+        currentPage = 1;
+        _ = InvokeAsync(LoadProducts);
+    }
+
+    protected override async Task OnInitializedAsync()
+    {
+        // Initialize debounce timer
+        _debounceTimer = new System.Timers.Timer(500);
+        _debounceTimer.AutoReset = false;
+        _debounceTimer.Elapsed += async (sender, e) => 
+        { 
+            await InvokeAsync(async () => await OnSearchToggled()); 
+        };
+
+        // Load independent data in parallel
+        var categoriesTask = ProductService.GetCategoriesAsync();
+        var tagsTask = ProductService.GetTagsAsync(true); 
+        
+        await Task.WhenAll(categoriesTask, tagsTask);
+        
+        categories = await categoriesTask;
+        tags = await tagsTask;
+    }
+
+    public void Dispose()
+    {
+        _debounceTimer?.Dispose();
+    }
+
+    protected override async Task OnParametersSetAsync()
+    {
+        currentPage = Page ?? 1;
+        if (currentPage < 1) currentPage = 1;
+        
+        await LoadProducts();
+    }
+    
+    private async Task OnSearchToggled()
+    {
+        pageCursors.Clear();
+        currentPage = 1;
+        await LoadProducts();
+        
+        if (Navigation.Uri.Contains("page=") && !Navigation.Uri.EndsWith("page=1"))
+        {
+             Navigation.NavigateTo("/admin/products?page=1");
+        }
+        else
+        {
+             StateHasChanged();
+        }
+    }
+
+    private async Task LoadProducts()
+    {
+        isLoading = true;
+        errorMessage = string.Empty;
+        StateHasChanged(); 
+        
+        try
+        {
+            string? lastDocId = null;
+            if (currentPage > 1 && pageCursors.ContainsKey(currentPage - 1))
+            {
+                lastDocId = pageCursors[currentPage - 1];
+            }
+
+            var response = await ProductService.GetProductsAsync(
+                page: currentPage, 
+                pageSize: 10, 
+                categoryId: selectedCategoryId, 
+                orderBy: null, 
+                tag: selectedTag, 
+                lastDocId: lastDocId, 
+                type: selectedType, 
+                onlyOutOfStock: selectedStockStatus,
+                search: string.IsNullOrWhiteSpace(_searchTerm) ? null : _searchTerm,
+                includeUnpublished: true);
+
+            products = response.Items;
+            totalPages = response.Pagination.TotalPages;
+            
+            if (response.Pagination.LastDocId != null)
+            {
+                pageCursors[currentPage] = response.Pagination.LastDocId;
+            }
+            
+            if (totalPages == 0) totalPages = 1;
+        }
+        catch (Exception ex)
+        {
+            errorMessage = L.Get("Admin.Products.LoadErrorDetail").Replace("{0}", ex.Message);
+            products = new List<Product>();
+        }
+        finally
+        {
+            isLoading = false;
+            StateHasChanged(); 
+        }
+    }
+
+    // Pagination
+    private void PreviousPage()
+    {
+        if (currentPage > 1)
+        {
+            var newPage = currentPage - 1;
+            Navigation.NavigateTo($"/admin/products?page={newPage}");
+        }
+    }
+
+    private void NextPage()
+    {
+        if (currentPage < totalPages)
+        {
+            var newPage = currentPage + 1;
+            Navigation.NavigateTo($"/admin/products?page={newPage}");
+        }
+    }
+    
+    // Deletion Interactions
+    private async Task ConfirmDeleteDialog(Product product)
+    {
+        var confirmed = await DialogService.ShowMessageBox(
+            "Confirmar Exclusão", 
+            $"Deseja realmente excluir o produto '{GetTranslatedTitle(product)}'?", 
+            yesText: "Excluir", cancelText: "Cancelar");
+
+        if (confirmed == true)
+        {
+            await HandleConfirmDelete(product.Id);
+        }
+    }
+
+    private async Task HandleConfirmDelete(string id)
+    {
+        if (await ProductService.DeleteProductAsync(id))
+        {
+            Snackbar.Add("Produto excluído com sucesso!", Severity.Success);
+            await LoadProducts();
+        }
+        else
+        {
+            Snackbar.Add("Erro ao excluir o produto.", Severity.Error);
+        }
+    }
+
+    private async Task OnCategoryChanged(string value)
+    {
+        selectedCategoryId = value;
+        pageCursors.Clear();
+        if (currentPage == 1) await LoadProducts();
+        else Navigation.NavigateTo("/admin/products?page=1");
+    }
+
+    private async Task OnTagChanged(string value)
+    {
+        selectedTag = value;
+        pageCursors.Clear();
+        if (currentPage == 1) await LoadProducts();
+        else Navigation.NavigateTo("/admin/products?page=1");
+    }
+
+    private async Task OnTypeChanged(string value)
+    {
+        selectedType = value;
+        pageCursors.Clear();
+        if (currentPage == 1) await LoadProducts();
+        else Navigation.NavigateTo("/admin/products?page=1");
+    }
+
+    private async Task OnStockStatusMudChanged(string value)
+    {
+        if (value == "OutOfStock") selectedStockStatus = true;
+        else selectedStockStatus = null;
+        
+        pageCursors.Clear();
+        if (currentPage == 1) await LoadProducts();
+        else Navigation.NavigateTo("/admin/products?page=1");
+    }
+
+    #region Translation Helpers
+    private string GetTranslatedTitle(Product product)
+    {
+        if (product == null) return string.Empty;
+        var lang = L.CurrentLanguage;
+        if (product.Translations != null && product.Translations.TryGetValue(lang, out var trans) && !string.IsNullOrEmpty(trans.Title))
+        {
+            return trans.Title;
+        }
+        return product.Title ?? string.Empty;
+    }
+
+    private string GetTranslatedDescription(Product product)
+    {
+        if (product == null) return string.Empty;
+        var lang = L.CurrentLanguage;
+        if (product.Translations != null && product.Translations.TryGetValue(lang, out var trans) && !string.IsNullOrEmpty(trans.Description))
+        {
+            return trans.Description;
+        }
+        return product.Description ?? string.Empty;
+    }
+    #endregion
+}
+

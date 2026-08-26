@@ -1,0 +1,205 @@
+@page "/"
+@using BlazorClient.Models
+@using BlazorClient.Core.Services
+@inject IProductService ProductService
+@inject NavigationManager Navigation
+@inject IJSRuntime JSRuntime
+@inject IClientLocaleService LocaleService
+@inject ILocalizationService L
+@implements IDisposable
+
+<PageTitle>@L.Get("Home.PageTitle")</PageTitle>
+
+<section class="ic-home-section" aria-labelledby="mais-visitados">
+<div class="ic-home-section-header">
+    <div class="ic-home-title-wrap"><span class="ic-home-index">01</span><div><h2 id="mais-visitados">Mais visitados</h2><p>Os produtos que mais despertaram interesse na loja.</p></div></div>
+    <a class="ic-section-link" href="/shop">Ver todos <MudIcon Icon="@Icons.Material.Filled.ArrowForward" Size="Size.Small" /></a>
+</div>
+<MudGrid Spacing="4" Justify="Justify.Center">
+    @if (isMostVisitedLoading)
+    {
+        <BlazorClient.Components.SkeletonLoader Type="BlazorClient.Components.SkeletonLoader.LoaderType.ProductGrid" Count="4" ColLg="3" ColMd="4" />
+    }
+    else if (mostVisitedProducts != null && mostVisitedProducts.Any())
+    {
+        @foreach (var product in mostVisitedProducts)
+        {
+        <MudItem xs="6" sm="6" md="3">
+                <BlazorClient.Components.ProductCard Product="@product" Priority="true" />
+            </MudItem>
+        }
+    }
+    else
+    {
+        <MudItem xs="12" Class="text-center py-8">
+            <MudIcon Icon="@Icons.Material.Filled.Info" Color="Color.Info" Size="Size.Large" Class="mb-2" />
+            <MudText Typo="Typo.body1" Class="text-muted">Nenhum produto disponível no momento.</MudText>
+        </MudItem>
+    }
+</MudGrid>
+</section>
+
+<section class="ic-home-section" aria-labelledby="mais-vendidos">
+<div class="ic-home-section-header">
+    <div class="ic-home-title-wrap"><span class="ic-home-index">02</span><div><h2 id="mais-vendidos">Mais vendidos</h2><p>Escolhas frequentes de quem já comprou na IdealCreative.</p></div></div>
+    <a class="ic-section-link" href="/shop">Todos os produtos <MudIcon Icon="@Icons.Material.Filled.ArrowForward" Size="Size.Small" /></a>
+</div>
+<MudGrid Spacing="4" Justify="Justify.Center">
+    @if (isLoading)
+    {
+        <BlazorClient.Components.SkeletonLoader Type="BlazorClient.Components.SkeletonLoader.LoaderType.ProductGrid" Count="4" ColLg="3" ColMd="4" />
+    }
+    else if (products != null && products.Any())
+    {
+        @foreach (var product in products)
+        {
+             <MudItem xs="6" sm="6" md="3">
+                <BlazorClient.Components.ProductCard Product="@product" />
+            </MudItem>
+        }
+    }
+</MudGrid>
+</section>
+
+<section class="ic-home-section" aria-labelledby="selecao-mes">
+<div class="ic-home-section-header">
+    <div class="ic-home-title-wrap"><span class="ic-home-index">03</span><div><h2 id="selecao-mes">Seleção do mês</h2><p>Produtos sazonais escolhidos para este momento.</p></div></div>
+    <a class="ic-section-link" href="/shop">Ver catálogo <MudIcon Icon="@Icons.Material.Filled.ArrowForward" Size="Size.Small" /></a>
+</div>
+<MudGrid Spacing="4" Justify="Justify.Center">
+    @if (isFeaturedLoading)
+    {
+        <BlazorClient.Components.SkeletonLoader Type="BlazorClient.Components.SkeletonLoader.LoaderType.ProductGrid" Count="4" ColLg="3" ColMd="4" />
+    }
+    else if (featuredProducts != null && featuredProducts.Any())
+    {
+        @foreach (var product in featuredProducts)
+        {
+            <MudItem xs="6" sm="6" md="3"><BlazorClient.Components.ProductCard Product="@product" /></MudItem>
+        }
+    }
+</MudGrid>
+</section>
+
+@code {
+    private List<Product> products = new();
+    private List<Product> featuredProducts = new();
+    private List<Product> mostVisitedProducts = new();
+    private bool isLoading = true;
+    private bool isFeaturedLoading = true;
+    private bool isMostVisitedLoading = true;
+    protected override async Task OnInitializedAsync()
+    {
+        LocaleService.OnChange += HandleLocaleChange;
+        L.OnLanguageChanged += HandleLanguageChanged;
+        
+        await LocaleService.EnsureInitializedAsync();
+        await Task.WhenAll(LoadProducts(), LoadFeaturedProducts(), LoadMostVisitedProducts());
+    }
+    
+    public void Dispose()
+    {
+        LocaleService.OnChange -= HandleLocaleChange;
+        L.OnLanguageChanged -= HandleLanguageChanged;
+    }
+
+    private async void HandleLanguageChanged()
+    {
+        await InvokeAsync(async () => {
+            await Task.WhenAll(LoadProducts(), LoadFeaturedProducts(), LoadMostVisitedProducts());
+            StateHasChanged();
+        });
+    }
+    
+    private async void HandleLocaleChange()
+    {
+        await Task.WhenAll(LoadProducts(), LoadFeaturedProducts(), LoadMostVisitedProducts());
+        StateHasChanged();
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!isLoading && products.Any())
+        {
+            await JSRuntime.InvokeVoidAsync("siteJs.dataBackgroundImage"); 
+        }
+    }
+
+    private async Task LoadProducts()
+    {
+        isLoading = true;
+        StateHasChanged();
+        try
+        {
+            var currency = LocaleService.CurrentLocale?.Currency;
+            products = await ProductService.GetBestSellingProductsAsync(8, currency);
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Erro ao carregar produtos: {ex.Message}");
+            products = new List<Product>();
+        }
+        finally
+        {
+            isLoading = false;
+            StateHasChanged();
+        }
+    }
+
+    private async Task LoadFeaturedProducts()
+    {
+        isFeaturedLoading = true;
+        StateHasChanged();
+        try
+        {
+            var currency = LocaleService.CurrentLocale?.Currency;
+            var response = await ProductService.GetFeaturedProductsAsync(currency);
+            featuredProducts = response?.Items ?? new List<Product>();
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Erro ao carregar produtos em destaque: {ex.Message}");
+            featuredProducts = new List<Product>();
+        }
+        finally
+        {
+            isFeaturedLoading = false;
+            StateHasChanged();
+        }
+    }
+
+    private async Task LoadMostVisitedProducts()
+    {
+        isMostVisitedLoading = true;
+        try
+        {
+            var currency = LocaleService.CurrentLocale?.Currency;
+            mostVisitedProducts = (await ProductService.GetProductsAsync(1, 8, orderBy: "views", currency: currency)).Items;
+        }
+        catch
+        {
+            mostVisitedProducts = new List<Product>();
+        }
+        finally
+        {
+            isMostVisitedLoading = false;
+            await InvokeAsync(StateHasChanged);
+        }
+    }
+
+    private string GetTranslatedTitle(Product product)
+    {
+        if (product.Translations == null || !product.Translations.Any())
+            return product.Title ?? string.Empty;
+            
+        var currentLang = L.CurrentLanguage;
+        
+        if (product.Translations.ContainsKey(currentLang) && 
+            !string.IsNullOrEmpty(product.Translations[currentLang].Title))
+        {
+            return product.Translations[currentLang].Title ?? string.Empty;
+        }
+        
+        return product.Title ?? string.Empty;
+    }
+}

@@ -1,0 +1,1478 @@
+@using BlazorClient.Core.Interfaces
+@page "/admin/products/new"
+@page "/admin/products/edit/{Id}"
+@using BlazorClient.Models
+@using BlazorClient.Core.Services
+@using BlazorClient.Components
+@inject IProductService ProductService
+@inject NavigationManager Navigation
+@inject IJSRuntime JSRuntime
+@inject ILocalizationService L
+@inject ISnackbar Snackbar
+@layout AdminLayout
+
+<div class="admin-page-header ic-admin-page-heading">
+    <div><span class="ic-admin-kicker">CATÁLOGO</span><h1>@(IsEdit ? "Editar produto" : "Novo produto")</h1><p>Organize informações, imagens, estoque e entrega do produto.</p></div>
+    <button type="button" class="btn btn-outline-secondary" @onclick="NavigateBack">
+        <i class="fa fa-arrow-left"></i> @L.Get("Admin.Common.Back")
+    </button>
+</div>
+
+<section class="admin-section" style="background: transparent; padding: 0;">
+    <div class="container">
+        <div class="admin-container">
+            <EditForm Model="@product" OnValidSubmit="HandleSubmit">
+                <DataAnnotationsValidator />
+                <ValidationSummary />
+
+                <div class="row">
+                    <!-- Image Upload Section -->
+                    <div class="col-md-4 mb-4">
+                        <div class="card h-100">
+                            <div class="card-body text-center">
+                                <h5 class="card-title mb-3">@L.Get("Admin.ProductForm.MainImage")</h5>
+                                
+                                <div class="image-preview mb-3 position-relative">
+                                    @if (!string.IsNullOrEmpty(product.ImageName))
+                                    {
+                                        <div class="position-relative">
+                                            <img src="@product.ImageName" class="img-fluid rounded" style="max-height: 200px; object-fit: cover;" />
+                                            <button type="button" class="btn btn-danger btn-sm position-absolute top-0 end-0 m-2" @onclick="RemoveImage" title="@L.Get("Admin.ProductForm.RemoveImage")">
+                                                <i class="fa fa-trash"></i>
+                                            </button>
+                                        </div>
+                                    }
+                                    else
+                                    {
+                                        <div class="bg-light p-4 rounded d-flex align-items-center justify-content-center" style="height: 200px;">
+                                            <i class="fa fa-image fa-3x text-muted"></i>
+                                        </div>
+                                    }
+                                </div>
+
+                                @if (isUploading)
+                                {
+                                    <div class="mb-3">
+                                        <div class="progress" style="height: 25px;">
+                                            <div class="progress-bar progress-bar-striped progress-bar-animated" 
+                                                 role="progressbar" 
+                                                 style="width: @(uploadProgress)%"
+                                                 aria-valuenow="@uploadProgress" 
+                                                 aria-valuemin="0" 
+                                                 aria-valuemax="100">
+                                                @uploadProgress%
+                                            </div>
+                                        </div>
+                                        <small class="text-muted">@L.Get("Admin.ProductForm.UploadingImage")</small>
+                                    </div>
+                                }
+
+                                <InputFile OnChange="HandleFileSelected" class="form-control" accept=".jpg,.jpeg,.png,.webp,.gif,.avif" disabled="@isUploading" />
+                                <small class="text-muted d-block mt-2">@L.Get("Admin.ProductForm.ImageFormats")</small>
+                                @if (!string.IsNullOrWhiteSpace(imageUploadError))
+                                {
+                                    <div class="alert alert-danger mt-3 mb-0 text-start" role="alert">@imageUploadError</div>
+                                }
+                                @if (!string.IsNullOrWhiteSpace(imageUploadNotice))
+                                {
+                                    <div class="alert alert-success mt-3 mb-0 text-start" role="status">@imageUploadNotice</div>
+                                }
+                                
+                                <!-- Imagens Adicionais -->
+                                <hr class="my-4" />
+                                <h6 class="card-title mb-3">@L.Get("Admin.ProductForm.AdditionalImages")</h6>
+                                
+                                @if (additionalImages.Count > 0)
+                                {
+                                    <div class="d-flex flex-wrap gap-2 mb-3 justify-content-center">
+                                        @for (int i = 0; i < additionalImages.Count; i++)
+                                        {
+                                            var index = i;
+                                            <div class="position-relative" style="width: 80px; height: 80px;">
+                                                <img src="@additionalImages[index]" class="rounded" style="width: 80px; height: 80px; object-fit: cover;" />
+                                                <button type="button" class="btn btn-danger btn-sm position-absolute top-0 end-0" 
+                                                        style="padding: 2px 5px; font-size: 10px;" 
+                                                        @onclick="() => RemoveAdditionalImage(index)" 
+                                                        title="@L.Get("Admin.ProductForm.Remove")">
+                                                    <i class="fa fa-times"></i>
+                                                </button>
+                                            </div>
+                                        }
+                                    </div>
+                                }
+                                
+                                @if (isUploadingAdditional)
+                                {
+                                    <div class="mb-3">
+                                        <div class="progress" style="height: 20px;">
+                                            <div class="progress-bar progress-bar-striped progress-bar-animated bg-info" 
+                                                 role="progressbar" 
+                                                 style="width: @(additionalUploadProgress)%">
+                                                @additionalUploadProgress%
+                                            </div>
+                                        </div>
+                                        <small class="text-muted">@L.Get("Admin.ProductForm.UploadingAdditional")</small>
+                                    </div>
+                                }
+                                
+                                <InputFile OnChange="HandleAdditionalImageSelected" class="form-control" accept=".jpg,.jpeg,.png,.webp,.gif,.avif" disabled="@isUploadingAdditional" multiple />
+                                <small class="text-muted d-block mt-2">@L.Get("Admin.ProductForm.AddExtraImages")</small>
+                                @if (!string.IsNullOrWhiteSpace(additionalImageUploadError))
+                                {
+                                    <div class="alert alert-danger mt-3 mb-0 text-start" role="alert">@additionalImageUploadError</div>
+                                }
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Product Details Section -->
+                    <div class="col-md-8">
+                        <div class="card">
+                            <div class="card-body">
+                                <div class="row">
+                                    <div class="col-md-12 mb-3">
+                                        <label class="form-label">@L.Get("Admin.Common.ProductNameLabel")</label>
+                                        <InputText class="form-control" @bind-Value="product.Title" />
+                                    </div>
+
+                                    <div class="col-md-6 mb-3">
+                                        <label class="form-label">@L.Get("Admin.Common.PriceR$Label")</label>
+                                        <InputNumber class="form-control" @bind-Value="product.Price" />
+                                    </div>
+
+                                    <div class="col-md-6 mb-3">
+                                        <label class="form-label">@L.Get("Admin.Common.Stock")</label>
+                                        <InputNumber class="form-control" @bind-Value="product.Qty" />
+                                    </div>
+                                    
+                                    @if (!product.IsDigital && !product.IsSubscription)
+                                    {
+                                        <div class="col-md-12 mb-3">
+                                            <div class="card bg-light">
+                                                <div class="card-body py-2">
+                                                    <h6 class="card-title text-muted mb-3" style="font-size: 0.9rem; font-weight: 600;">
+                                                        <i class="fa fa-truck"></i> @L.Get("Admin.ProductForm.ShippingDimensions")
+                                                    </h6>
+                                                    
+                                                    @if (product.Height > 105 || product.Width > 105 || product.Length > 105 || product.Weight > 30)
+                                                    {
+                                                        <div class="alert alert-warning py-2 small mb-3">
+                                                            <i class="fa fa-exclamation-triangle"></i> @L.Get("Product.DimensionLimitWarning")
+                                                        </div>
+                                                    }
+
+                                                    <div class="row">
+                                                        <div class="col-md-3 mb-2">
+                                                            <label class="form-label small">@L.Get("Admin.Common.Weight") <span class="text-muted" style="font-size: 0.7rem;">@L.Get("Product.WeightLimitInfo")</span></label>
+                                                            <InputNumber class="form-control form-control-sm" @bind-Value="product.Weight" step="0.1" />
+                                                        </div>
+                                                        <div class="col-md-3 mb-2">
+                                                            <label class="form-label small">@L.Get("Admin.Common.Width") <span class="text-muted" style="font-size: 0.7rem;">@L.Get("Product.DimensionLimitInfo")</span></label>
+                                                            <InputNumber class="form-control form-control-sm" @bind-Value="product.Width" />
+                                                        </div>
+                                                        <div class="col-md-3 mb-2">
+                                                            <label class="form-label small">@L.Get("Admin.Common.Height") <span class="text-muted" style="font-size: 0.7rem;">@L.Get("Product.DimensionLimitInfo")</span></label>
+                                                            <InputNumber class="form-control form-control-sm" @bind-Value="product.Height" />
+                                                        </div>
+                                                        <div class="col-md-3 mb-2">
+                                                            <label class="form-label small">@L.Get("Admin.Common.Length") <span class="text-muted" style="font-size: 0.7rem;">@L.Get("Product.DimensionLimitInfo")</span></label>
+                                                            <InputNumber class="form-control form-control-sm" @bind-Value="product.Length" />
+                                                        </div>
+                                                    </div>
+                                                    <small class="text-muted" style="font-size: 0.75rem;">
+                                                        @L.Get("Admin.ProductForm.ShippingNote")
+                                                    </small>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    }
+
+                                    <div class="col-md-12 mb-3">
+                                        <div class="card bg-light border-secondary">
+                                            <div class="card-body py-2">
+                                                <h6 class="card-title text-muted mb-3" style="font-size: 0.9rem; font-weight: 600;">
+                                                    <i class="fa fa-file-text-o"></i> @L.Get("Admin.ProductForm.FiscalData")
+                                                </h6>
+                                                <div class="row">
+                                                    <div class="col-md-4 mb-2">
+                                                        <label class="form-label small">@L.Get("Admin.ProductForm.NcmLabel")</label>
+                                                        <InputText class="form-control form-control-sm" @bind-Value="product.Ncm" placeholder="00000000" />
+                                                    </div>
+                                                    <div class="col-md-4 mb-2">
+                                                        <label class="form-label small">@L.Get("Admin.ProductForm.CestLabel")</label>
+                                                        <InputText class="form-control form-control-sm" @bind-Value="product.Cest" />
+                                                    </div>
+                                                    <div class="col-md-4 mb-2">
+                                                        <label class="form-label small">@L.Get("Admin.Common.Origin")</label>
+                                                        <InputSelect class="form-select form-select-sm" @bind-Value="product.Origem">
+                                                            <option value="0">@L.Get("Admin.ProductForm.OriginNational")</option>
+                                                            <option value="1">@L.Get("Admin.ProductForm.OriginForeignDirect")</option>
+                                                            <option value="2">@L.Get("Admin.ProductForm.OriginForeignInternal")</option>
+                                                        </InputSelect>
+                                                    </div>
+                                                    <div class="col-md-6 mb-2">
+                                                        <label class="form-label small">@L.Get("Admin.ProductForm.GtinLabel")</label>
+                                                        <InputText class="form-control form-control-sm" @bind-Value="product.Gtin" placeholder="SEM GTIN" />
+                                                    </div>
+                                                    <div class="col-md-6 mb-2">
+                                                        <label class="form-label small">@L.Get("Admin.Common.CommercialUnit")</label>
+                                                        <InputText class="form-control form-control-sm" @bind-Value="product.Unidade" placeholder="@L.Get("Admin.ProductForm.UnitPlaceholder")" />
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    <div class="col-md-12 mb-3">
+                                        <div class="d-flex justify-content-between align-items-center mb-2">
+                                            <label class="form-label mb-0">@L.Get("Admin.Common.Category")</label>
+                                            <div>
+                                                <button type="button" class="btn btn-sm btn-outline-primary me-2" 
+                                                        @onclick="EditSelectedCategory" 
+                                                        disabled="@string.IsNullOrEmpty(product.CategoryId)"
+                                                        title="@L.Get("Admin.Common.Edit")">
+                                                    <i class="fa fa-pencil"></i>
+                                                </button>
+                                                <button type="button" class="btn btn-sm btn-success" @onclick="() => showCategoryModal = true">
+                                                    <i class="fa fa-plus"></i> @L.Get("Admin.Common.NewCategory")
+                                                </button>
+                                            </div>
+                                        </div>
+                                        <InputSelect class="form-control" @bind-Value="product.CategoryId">
+                                            <option value="">@L.Get("Admin.ProductForm.SelectCategory")</option>
+                                            @foreach (var category in categories)
+                                            {
+                                                <option value="@category.Id">@category.GetTranslatedTitle(L.CurrentLanguage)</option>
+                                            }
+                                        </InputSelect>
+                                    </div>
+
+                                    <div class="col-md-12 mb-4">
+                                        <div class="d-flex justify-content-between align-items-center mb-2">
+                                            <h6 class="mb-0 text-primary" style="font-weight: 600;">
+                                                <i class="fa fa-globe"></i> @L.Get("Admin.ProductForm.ContentTranslations")
+                                            </h6>
+                                            <div class="form-check form-switch mb-0">
+                                                <InputCheckbox class="form-check-input" @bind-Value="product.SkipTranslation" id="skipTrans" />
+                                                <label class="form-check-label small" for="skipTrans" title="@L.Get("Admin.ProductForm.SkipTransTooltip")">
+                                                    @L.Get("Admin.ProductForm.SkipTranslation")
+                                                </label>
+                                            </div>
+                                        </div>
+
+                                        <MudTabs Elevation="0" Outlined="true" ApplyEffectsToContainer="false" Color="Color.Primary" TabHeaderClass="product-admin-tabs" Rounded="true" PanelClass="pt-4 px-1" KeepPanelsAlive="true">
+                                            @* Base Language (Portuguese) *@
+                                            <MudTabPanel Text="🇧🇷 PT-BR (Base)">
+                                                <div class="mb-0">
+                                                    <div class="mb-3">
+                                                        <label class="form-label" style="font-weight: 500;">@L.Get("Admin.Common.ProductNameLabel")</label>
+                                                        <InputText class="form-control" @bind-Value="product.Title" placeholder="Título do produto em Português" />
+                                                    </div>
+
+                                                    <div class="mb-3">
+                                                        <label class="form-label" style="font-weight: 500;">@L.Get("Admin.Common.ShortDescription")</label>
+                                                        <InputTextArea class="form-control" @bind-Value="product.Description" rows="2" placeholder="Resumo em Português" />
+                                                    </div>
+
+                                                    <div class="mb-0">
+                                                        <label class="form-label" style="font-weight: 500;">@L.Get("Admin.Common.FullDescription")</label>
+                                                        <div class="quill-editor-wrapper">
+                                                            <BlazoredTextEditor @ref="@QuillHtml" Placeholder="@L.Get("Admin.ProductForm.DescriptionPlaceholder")">
+                                                                <ToolbarContent>
+                                                                    <select class="ql-header">
+                                                                        <option selected></option>
+                                                                        <option value="1"></option>
+                                                                        <option value="2"></option>
+                                                                        <option value="3"></option>
+                                                                    </select>
+                                                                    <span class="ql-formats">
+                                                                        <button class="ql-bold"></button>
+                                                                        <button class="ql-italic"></button>
+                                                                        <button class="ql-underline"></button>
+                                                                        <button class="ql-strike"></button>
+                                                                    </span>
+                                                                    <span class="ql-formats">
+                                                                        <select class="ql-color"></select>
+                                                                        <select class="ql-background"></select>
+                                                                    </span>
+                                                                    <span class="ql-formats">
+                                                                        <button class="ql-list" value="ordered"></button>
+                                                                        <button class="ql-list" value="bullet"></button>
+                                                                    </span>
+                                                                    <span class="ql-formats">
+                                                                        <button class="ql-link"></button>
+                                                                        <button class="ql-image"></button>
+                                                                    </span>
+                                                                    <span class="ql-formats">
+                                                                        <button class="ql-clean"></button>
+                                                                    </span>
+                                                                </ToolbarContent>
+                                                                <EditorContent>
+                                                                    @((MarkupString)(product.FullDesc ?? ""))
+                                                                </EditorContent>
+                                                            </BlazoredTextEditor>
+                                                        </div>
+                                                        <small class="text-muted">@L.Get("Admin.ProductForm.ToolbarTip")</small>
+                                                    </div>
+                                                </div>
+                                            </MudTabPanel>
+
+                                            @* Additional Languages *@
+                                            @foreach (var lang in SupportedLanguagesList.Where(l => l.Code != "pt-BR"))
+                                            {
+                                                var langCode = lang.Code;
+                                                var trans = GetTranslationModel(langCode);
+                                                <MudTabPanel Text="@($"{lang.Flag} {lang.Code}")" ToolTip="@lang.Name">
+                                                    <div class="alert alert-info py-2 small mb-3">
+                                                        <i class="fa fa-info-circle"></i> @(string.Format(L.Get("Admin.ProductForm.ManualEntryHint"), lang.Name))
+                                                    </div>
+
+                                                    <div class="mb-3">
+                                                        <label class="form-label" style="font-weight: 500;">@L.Get("Admin.Common.ProductNameLabel") (@lang.Code)</label>
+                                                        <InputText class="form-control" @bind-Value="trans.Title" placeholder="@($"Title in {lang.Name}")" />
+                                                        <div class="d-flex justify-content-end mt-1">
+                                                            <button type="button" class="btn btn-link btn-sm p-0 m-0" style="font-size: 0.75rem;" 
+                                                                    @onclick="() => CopyTitleToTranslation(langCode)">
+                                                                <i class="fa fa-copy"></i> @L.Get("Admin.ProductForm.CopyFromBase")
+                                                            </button>
+                                                        </div>
+                                                    </div>
+
+                                                    <div class="mb-3">
+                                                        <label class="form-label" style="font-weight: 500;">@L.Get("Admin.Common.ShortDescription") (@lang.Code)</label>
+                                                        <InputTextArea class="form-control" @bind-Value="trans.Description" rows="2" placeholder="@($"Short desc in {lang.Name}")" />
+                                                        <div class="d-flex justify-content-end mt-1">
+                                                            <button type="button" class="btn btn-link btn-sm p-0 m-0" style="font-size: 0.75rem;" 
+                                                                    @onclick="() => CopyDescriptionToTranslation(langCode)">
+                                                                <i class="fa fa-copy"></i> @L.Get("Admin.ProductForm.CopyFromBase")
+                                                            </button>
+                                                        </div>
+                                                    </div>
+
+                                                    <div class="mb-0">
+                                                        <label class="form-label" style="font-weight: 500;">@L.Get("Admin.Common.FullDescription") (HTML - @lang.Code)</label>
+                                                        <InputTextArea class="form-control" @bind-Value="trans.FullDesc" rows="8" style="font-family: monospace; font-size: 0.85rem;" placeholder="Insira o HTML traduzido ou texto puro aqui." />
+                                                        <div class="d-flex justify-content-end mt-1">
+                                                            <button type="button" class="btn btn-link btn-sm p-0 m-0" style="font-size: 0.75rem;" 
+                                                                    @onclick="() => CopyRichToTranslation(langCode)">
+                                                                <i class="fa fa-copy"></i> @L.Get("Admin.ProductForm.CopyFromBase")
+                                                            </button>
+                                                        </div>
+                                                    </div>
+                                                </MudTabPanel>
+                                            }
+                                            
+                                        </MudTabs>
+                                    </div>
+                                    
+                                    <div class="col-md-12 mb-3">
+                                        <label class="form-label">@L.Get("Admin.Common.VideoUrl")</label>
+                                        <InputText class="form-control" @bind-Value="product.VideoUrl" />
+                                    </div>
+
+                                    <div class="col-md-12 mb-3">                                        <TagPicker @bind-Value="product.Tags" />
+                                    </div>
+                                    
+                                    <div class="col-md-12 mb-3">
+                                        <div class="form-check form-switch">
+                                            <InputCheckbox class="form-check-input" @bind-Value="product.IsDigital" id="isDigital" />
+                                            <label class="form-check-label" for="isDigital">@L.Get("Admin.Common.ProductDigital")</label>
+                                        </div>
+                                    </div>
+
+                                    @* Toggle para anexar arquivo mesmo em produtos físicos *@
+                                    @if (!product.IsDigital)
+                                    {
+                                        <div class="col-md-12 mb-3">
+                                            <div class="form-check form-switch">
+                                                <InputCheckbox class="form-check-input" @bind-Value="showDigitalFileSection" id="attachDigitalFile" />
+                                                <label class="form-check-label" for="attachDigitalFile">
+                                                    <i class="fa fa-paperclip"></i> @L.Get("Admin.ProductForm.AttachDigitalFile")
+                                                </label>
+                                            </div>
+                                            <small class="text-muted">@L.Get("Admin.ProductForm.DigitalFileNote")</small>
+                                        </div>
+                                    }
+
+                                    @if (product.IsDigital || showDigitalFileSection || !string.IsNullOrEmpty(product.DigitalFilePath))
+                                    {
+                                        <div class="col-md-12 mb-3">
+                                            <div class="card bg-light">
+                                                <div class="card-body ic-digital-file-card">
+                                                    <h6 class="card-title">
+                                                        <i class="fa fa-file-archive-o"></i> @L.Get("Admin.ProductForm.DigitalFileZip")
+                                                    </h6>
+                                                    
+                                                    @if (!string.IsNullOrEmpty(product.DigitalFilePath))
+                                                    {
+                                                        <div class="ic-digital-file-summary mb-3" role="status">
+                                                            <div class="ic-digital-file-info">
+                                                                <i class="fa fa-check-circle"></i>
+                                                                <strong>@L.Get("Admin.ProductForm.FileUploaded")</strong> @GetDigitalFileName()
+                                                            </div>
+                                                            <div class="ic-digital-file-actions">
+                                                                @if (IsEdit)
+                                                                {
+                                                                    <button type="button" class="btn btn-sm btn-outline-primary" @onclick="DownloadDigitalFile" disabled="@isDownloadingDigital">
+                                                                        <i class="fa fa-download"></i> @(isDownloadingDigital ? "Preparando..." : "Baixar")
+                                                                    </button>
+                                                                }
+                                                                <button type="button" class="btn btn-sm btn-info text-white" @onclick="InspectFile" title="Verificar integridade do backup">
+                                                                    <i class="fa fa-search"></i> @L.Get("Admin.ProductForm.VerifyBackup")
+                                                                </button>
+                                                                <button type="button" class="btn btn-sm btn-danger" @onclick="RemoveDigitalFile" disabled="@isUploadingDigital">
+                                                                    <i class="fa fa-trash"></i> @L.Get("Admin.ProductForm.Remove")
+                                                                </button>
+                                                            </div>
+                                                        </div>
+                                                        <small class="text-muted">@L.Get("Admin.ProductForm.ReplaceFileNote")</small>
+                                                    }
+                                                    else
+                                                    {
+                                                        @if (isUploadingDigital)
+                                                        {
+                                                            <div class="mb-3">
+                                                                <div class="progress" style="height: 25px;">
+                                                                    <div class="progress-bar progress-bar-striped progress-bar-animated bg-success" 
+                                                                         role="progressbar" 
+                                                                         style="width: @(digitalUploadProgress)%"
+                                                                         aria-valuenow="@digitalUploadProgress" 
+                                                                         aria-valuemin="0" 
+                                                                         aria-valuemax="100">
+                                                                        @digitalUploadProgress%
+                                                                    </div>
+                                                                </div>
+                                                                <small class="text-muted">@L.Get("Admin.ProductForm.UploadingFile")</small>
+                                                            </div>
+                                                        }
+                                                        else
+                                                        {
+                                                            <InputFile OnChange="HandleDigitalFileSelected" class="form-control" accept=".zip" />
+                                                            <small class="text-muted d-block mt-2">@L.Get("Admin.ProductForm.FileFormatNote")</small>
+                                                            @if (!string.IsNullOrEmpty(digitalFileError))
+                                                            {
+                                                                <div class="alert alert-danger mt-2">@digitalFileError</div>
+                                                            }
+                                                        }
+                                                    }
+
+
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        }
+
+                                </div>
+
+
+
+                                <div class="mt-3">
+                                    <button type="submit" class="btn btn-primary" disabled="@isSubmitting">
+                                        @if (isSubmitting)
+                                        {
+                                            <span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span>
+                                            <span> @L.Get("Admin.ProductForm.Saving")</span>
+                                        }
+                                        else
+                                        {
+                                            <i class="fa fa-save"></i>
+                                            <span> @L.Get("Admin.ProductForm.SaveProduct")</span>
+                                        }
+                                    </button>
+                                </div>
+                                
+                                @if (showSuccessMessage)
+                                {
+                                    <div class="alert alert-success mt-3 shadow-sm border-success">
+                                        <div class="d-flex align-items-center">
+                                            <i class="fa fa-check-circle fa-2x me-3"></i>
+                                            <div>
+                                                <h5 class="alert-heading mb-1">@L.Get("Admin.ProductForm.SuccessTitle")</h5>
+                                                <p class="mb-0">@L.Get("Admin.ProductForm.SuccessMessage")</p>
+                                            </div>
+                                        </div>
+                                    </div>
+                                }
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </EditForm>
+
+            <!-- Modal para criar nova categoria -->
+            @if (showCategoryModal)
+            {
+                <div class="modal fade show d-block" tabindex="-1" style="background-color: rgba(0,0,0,0.5);">
+                    <div class="modal-dialog modal-dialog-centered">
+                        <div class="modal-content">
+                            <div class="modal-header">
+                                <h5 class="modal-title">@L.Get("Admin.ProductForm.ManageCategories")</h5>
+                                <button type="button" class="btn-close" @onclick="() => showCategoryModal = false"></button>
+                            </div>
+                            <div class="modal-body">
+
+                                <div class="mb-4">
+                                    <h6 class="border-bottom pb-2">@L.Get("Admin.ProductForm.ExistingCategories")</h6>
+                                    
+                                    <!-- Search and Pagination Controls -->
+                                    <div class="row g-2 mb-2">
+                                        <div class="col-8">
+                                            <div class="input-group input-group-sm">
+                                                <span class="input-group-text"><i class="fa fa-search"></i></span>
+                                                <input type="text" class="form-control" placeholder="@L.Get("Admin.ProductForm.SearchPlaceholder")" 
+                                                       @bind="categorySearchTerm" @bind:event="oninput" />
+                                            </div>
+                                        </div>
+                                        <div class="col-4 text-end">
+                                            <small class="text-muted">
+                                                @((categoryCurrentPage - 1) * categoryPageSize + 1) - 
+                                                @(Math.Min(categoryCurrentPage * categoryPageSize, FilteredCategories.Count)) 
+                                                de @FilteredCategories.Count
+                                            </small>
+                                        </div>
+                                    </div>
+
+                                    @if(!FilteredCategories.Any())
+                                    {
+                                        <p class="text-muted text-center py-3">@L.Get("Admin.ProductForm.NoCategoriesFound")</p>
+                                    }
+                                    else
+                                    {
+                                        <div class="list-group mb-2" style="max-height: 250px; overflow-y: auto;">
+                                            @foreach (var category in PaginatedCategories)
+                                            {
+                                                var cat = category;
+                                                <div @key="cat.Id" class="list-group-item d-flex justify-content-between align-items-center py-2">
+                                                    <div class="d-flex align-items-center">
+                                                        <span>@cat.Title</span>
+                                                    </div>
+                                                    <div class="d-flex gap-1">
+                                                        @if (pendingDeleteCategoryId == cat.Id)
+                                                        {
+                                                            <div class="btn-group">
+                                                                <button type="button" class="btn btn-sm btn-danger" @onclick="ConfirmDeleteCategory">Sim</button>
+                                                                <button type="button" class="btn btn-sm btn-secondary" @onclick="CancelDeleteCategory">Não</button>
+                                                            </div>
+                                                        }
+                                                        else
+                                                        {
+                                                            <button type="button" class="btn btn-sm btn-outline-primary" @onclick="() => StartEditCategory(cat)" title="Editar">
+                                                                <i class="fa fa-pencil"></i>
+                                                            </button>
+                                                            <button type="button" class="btn btn-sm btn-outline-danger" @onclick="() => { pendingDeleteCategoryId = cat.Id; }" title="Excluir">
+                                                                <i class="fa fa-trash"></i>
+                                                            </button>
+                                                        }
+                                                    </div>
+                                                </div>
+                                            }
+                                        </div>
+                                        
+                                        <!-- Pagination Buttons -->
+                                        @if(TotalCategoryPages > 1)
+                                        {
+                                            <div class="d-flex justify-content-center gap-2">
+                                                <button type="button" class="btn btn-sm btn-outline-secondary" 
+                                                        disabled="@(categoryCurrentPage == 1)"
+                                                        @onclick="() => categoryCurrentPage--">
+                                                    <i class="fa fa-chevron-left"></i>
+                                                </button>
+                                                <span class="align-self-center small">@L.Get("Admin.ProductForm.PageXofY", categoryCurrentPage.ToString(), TotalCategoryPages.ToString())</span>
+                                                <button type="button" class="btn btn-sm btn-outline-secondary" 
+                                                        disabled="@(categoryCurrentPage >= TotalCategoryPages)"
+                                                        @onclick="() => categoryCurrentPage++">
+                                                    <i class="fa fa-chevron-right"></i>
+                                                </button>
+                                            </div>
+                                        }
+                                    }
+                                </div>
+                                
+                                <h6 class="border-bottom pb-2 mt-3">@(isEditingCategory ? "Editar Categoria" : L.Get("Admin.Common.NewCategory"))</h6>
+                                
+                                <div class="mb-3">
+                                    <label class="form-label small">@L.Get("Admin.Common.CategoryName") (PT-BR)</label>
+                                    <InputText class="form-control" @bind-Value="categoryDto.Title" placeholder="@L.Get("Admin.ProductForm.CategoryPlaceholder")" />
+                                </div>
+
+                                <MudTabs Elevation="0" Outlined="true" ApplyEffectsToContainer="false" Color="Color.Primary" Rounded="true" PanelClass="pt-3 px-1" MinimumTabWidth="60px">
+                                    @foreach (var lang in SupportedLanguagesList.Where(l => l.Code != "pt-BR"))
+                                    {
+                                        var langCode = lang.Code;
+                                        var trans = GetCategoryTranslationModel(langCode);
+                                        <MudTabPanel Text="@($"{lang.Flag} {lang.Code}")">
+                                            <div class="mb-2">
+                                                <label class="form-label small">Título (@lang.Code)</label>
+                                                <InputText class="form-control form-control-sm" @bind-Value="trans.Title" placeholder="@($"Título em {lang.Name}")" />
+                                            </div>
+                                        </MudTabPanel>
+                                    }
+                                </MudTabs>
+
+                                <div class="mb-3 mt-3">
+                                    <label class="form-label small">Prioridade</label>
+                                    <InputNumber class="form-control" @bind-Value="categoryDto.Priority" />
+                                </div>
+                                
+                                @if (!string.IsNullOrEmpty(categoryErrorMessage))
+                                {
+                                    <div class="alert alert-danger py-2 small mb-3">@categoryErrorMessage</div>
+                                }
+                                
+                                <div class="d-flex justify-content-end gap-2 mt-4">
+                                    <button type="button" class="btn btn-secondary" @onclick="() => { showCategoryModal = false; CancelEditCategory(); }">@L.Get("Admin.ProductForm.Close")</button>
+                                    <button type="button" class="btn btn-primary" @onclick="HandleSaveCategory" disabled="@isSavingCategory">
+                                        @if (isSavingCategory)
+                                        {
+                                            <span class="spinner-border spinner-border-sm"></span>
+                                            <span> @L.Get("Admin.ProductForm.Saving")</span>
+                                        }
+                                        else
+                                        {
+                                            <i class="fa fa-save"></i>
+                                            <span> @(isEditingCategory ? "Salvar" : L.Get("Admin.ProductForm.Create"))</span>
+                                        }
+                                    </button>
+                                    @if (isEditingCategory)
+                                    {
+                                        <button type="button" class="btn btn-outline-secondary" @onclick="CancelEditCategory">Cancelar Edição</button>
+                                    }
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            }
+        </div>
+    </div>
+</section>
+
+@if (showInspectionModal)
+{
+    <div class="modal fade show" tabindex="-1" style="display: block; background-color: rgba(0,0,0,0.5);">
+        <div class="modal-dialog modal-lg">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title"><i class="fa fa-search"></i> @L.Get("Admin.ProductForm.BackupReport")</h5>
+                    <button type="button" class="btn-close" @onclick="CloseInspectionModal"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="alert alert-info">
+                        <i class="fa fa-info-circle"></i> @L.Get("Admin.ProductForm.BackupDetails")
+                    </div>
+                    <textarea class="form-control" rows="15" readonly style="font-family: monospace;">@inspectionResult</textarea>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" @onclick="CloseInspectionModal">@L.Get("Admin.Common.Close")</button>
+                    <button type="button" class="btn btn-primary" @onclick="CopyInspectionResult">
+                        <i class="fa @(copySuccess ? "fa-check" : "fa-copy")"></i> @(copySuccess ? L.Get("Admin.ProductForm.Copied") : L.Get("Admin.ProductForm.CopyText"))
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+<style>
+    /* Ensure modal shows up on top */
+    .modal-backdrop.show {
+        z-index: 1040;
+    }
+    .modal.show {
+        z-index: 1050;
+    }
+    
+    /* Quill Editor Wrapper - Fix for border duplication bug */
+    .quill-editor-wrapper {
+        border: 1px solid #ced4da;
+        border-radius: 0.25rem;
+        overflow: hidden;
+        background: white;
+    }
+    
+    .quill-editor-wrapper .ql-toolbar {
+        border: none !important;
+        border-bottom: 1px solid #ced4da !important;
+        background: #f8f9fa;
+    }
+    
+    .quill-editor-wrapper .ql-container {
+        border: none !important;
+        min-height: 200px;
+        font-size: 1rem;
+    }
+    
+    .quill-editor-wrapper .ql-editor {
+        min-height: 200px;
+    }
+</style>
+
+@code {
+    [Parameter]
+    public string? Id { get; set; }
+
+    [SupplyParameterFromQuery]
+    public int? ReturnPage { get; set; }
+
+    private void NavigateBack()
+    {
+        if (ReturnPage.HasValue && ReturnPage > 1)
+        {
+            Navigation.NavigateTo($"/admin/products?page={ReturnPage}");
+        }
+        else
+        {
+            Navigation.NavigateTo("/admin/products");
+        }
+    }
+
+    private bool IsEdit => !string.IsNullOrEmpty(Id);
+    private CreateProductDto product = new();
+    private List<Category> categories = new();
+    private bool isSubmitting = false;
+    private bool isDownloadingDigital = false;
+    private bool showSuccessMessage = false;
+
+    // Multi-language state
+    private List<LanguageInfo> SupportedLanguagesList = LocalizationService.SupportedLanguages.Values.ToList();
+    private Dictionary<string, ProductTranslation> translationModels = new();
+    
+    // Upload progress tracking
+    private bool isUploading = false;
+    private string imageUploadError = string.Empty;
+    private string imageUploadNotice = string.Empty;
+    private string? pendingMainImageDeletion;
+    private int uploadProgress = 0;
+    
+    // Digital file upload tracking
+    private bool isUploadingDigital = false;
+    private int digitalUploadProgress = 0;
+    private string digitalFileError = string.Empty;
+    
+    // Category management
+    private bool showCategoryModal = false;
+    private CreateCategoryDto categoryDto = new();
+    private bool isSavingCategory = false;
+    private bool isEditingCategory = false;
+    private string? editingCategoryId = null;
+    private Dictionary<string, CategoryTranslation> categoryTranslationModels = new();
+    private string categoryErrorMessage = string.Empty;
+    private string? pendingDeleteCategoryId = null; 
+    
+    // Additional images
+    private List<string> additionalImages = new();
+    private bool isUploadingAdditional = false;
+    private string additionalImageUploadError = string.Empty;
+    private int additionalUploadProgress = 0;
+
+    // Toggle to show digital file section for non-digital products
+    private bool showDigitalFileSection = false;
+
+    // Blazored Text Editor reference
+    private BlazoredTextEditor? QuillHtml;
+
+    // Pagination and Search state
+    private string categorySearchTerm = "";
+    private int categoryCurrentPage = 1;
+    private int categoryPageSize = 5;
+
+    private List<Category> FilteredCategories => categories
+        .Where(c => string.IsNullOrEmpty(categorySearchTerm) || 
+                   c.Title.Contains(categorySearchTerm, StringComparison.OrdinalIgnoreCase))
+        .ToList();
+
+    private List<Category> PaginatedCategories => FilteredCategories
+        .Skip((categoryCurrentPage - 1) * categoryPageSize)
+        .Take(categoryPageSize)
+        .ToList();
+
+    private int TotalCategoryPages => (int)Math.Ceiling((double)FilteredCategories.Count / categoryPageSize);
+
+    protected override async Task OnInitializedAsync()
+    {
+        categories = await ProductService.GetCategoriesAsync();
+
+        if (IsEdit)
+        {
+            // Use Admin method to bypass cache and ensure fresh data
+            var existingProduct = await ProductService.GetAdminProductAsync(Id!);
+            if (existingProduct != null)
+            {
+                product = new CreateProductDto
+                {
+                    Title = existingProduct.Title,
+                    Price = existingProduct.Price,
+                    Description = existingProduct.Description,
+                    FullDesc = existingProduct.FullDesc,
+
+                    Qty = existingProduct.Qty,
+                    ImageName = existingProduct.ImageName,
+                    Images = existingProduct.Images,
+                    CategoryId = existingProduct.CategoryId,
+                    VideoUrl = existingProduct.VideoUrl,
+                    DownloadUrl = existingProduct.DownloadUrl,
+                    Tags = existingProduct.Tags,
+                    IsSubscription = existingProduct.IsSubscription,
+                    PayPalPlanId = existingProduct.PayPalPlanId,
+                    RecurringInterval = existingProduct.RecurringInterval,
+                    DurationMonths = existingProduct.DurationMonths > 0 ? existingProduct.DurationMonths : 1,
+                    IsDigital = existingProduct.IsDigital,
+                    DigitalFilePath = existingProduct.DigitalFilePath,
+                    HideDigitalFromCustomer = existingProduct.HideDigitalFromCustomer,
+                    TelegramGroupId = existingProduct.TelegramGroupId,
+                    
+                    // Shipping Dimensions
+                    Width = existingProduct.Width,
+                    Height = existingProduct.Height,
+                    Length = existingProduct.Length,
+                    Weight = existingProduct.Weight,
+
+                    // Fiscal Fields
+                    Ncm = existingProduct.Ncm,
+                    Cest = existingProduct.Cest,
+                    Origem = existingProduct.Origem,
+                    Gtin = existingProduct.Gtin,
+                    Unidade = existingProduct.Unidade ?? "UN",
+                    Translations = existingProduct.Translations,
+                    SkipTranslation = existingProduct.SkipTranslation
+                };
+                
+                // Initialize translation models from existing product translations
+                if (existingProduct.Translations != null)
+                {
+                    foreach (var kv in existingProduct.Translations)
+                    {
+                        translationModels[kv.Key] = new ProductTranslation
+                        {
+                            Title = kv.Value.Title,
+                            Description = kv.Value.Description,
+                            FullDesc = kv.Value.FullDesc,
+                            ManualOverride = kv.Value.ManualOverride
+                        };
+                    }
+                }
+                
+                // Load additional images
+                if (existingProduct.Images != null && existingProduct.Images.Count > 0)
+                {
+                    additionalImages = new List<string>(existingProduct.Images);
+                }
+            }
+        }
+    }
+
+    private async Task HandleFileSelected(InputFileChangeEventArgs e)
+    {
+        imageUploadError = string.Empty;
+        imageUploadNotice = string.Empty;
+        var file = e.File;
+        if (file != null)
+        {
+            isUploading = true;
+            uploadProgress = 0;
+            StateHasChanged();
+            
+            // Optimize image: Resize to max 1200x1200 and convert to WebP
+            IBrowserFile uploadFile = file;
+            try 
+            {
+                uploadFile = await file.RequestImageFileAsync("image/webp", 1200, 1200);
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Image optimization failed, using original: {ex.Message}");
+            }
+
+            try
+            {
+                var url = await ProductService.UploadProductImageAsync(uploadFile, (progress) =>
+                {
+                    uploadProgress = progress;
+                    InvokeAsync(StateHasChanged);
+                });
+                if (!string.IsNullOrWhiteSpace(product.ImageName) && !string.Equals(product.ImageName, url, StringComparison.Ordinal))
+                    pendingMainImageDeletion = product.ImageName;
+                product.ImageName = url;
+                imageUploadNotice = "Imagem enviada. Clique em “Salvar Produto” para gravar a alteração no catálogo.";
+            }
+            catch (InvalidOperationException ex)
+            {
+                imageUploadError = ex.Message;
+            }
+            finally
+            {
+                isUploading = false;
+                uploadProgress = 0;
+                StateHasChanged();
+            }
+        }
+    }
+
+    private async Task RemoveImage()
+    {
+        pendingMainImageDeletion = product.ImageName;
+        product.ImageName = null;
+        imageUploadNotice = "Imagem removida do formulário. Clique em “Salvar Produto” para confirmar a remoção.";
+    }
+    
+    private async Task HandleAdditionalImageSelected(InputFileChangeEventArgs e)
+    {
+        additionalImageUploadError = string.Empty;
+        // Allow up to 10 images at once
+        var files = e.GetMultipleFiles(10);
+        if (files.Count > 0)
+        {
+            isUploadingAdditional = true;
+            additionalUploadProgress = 0;
+            StateHasChanged();
+            
+            var totalFiles = files.Count;
+            var processedCount = 0;
+
+            foreach (var file in files)
+            {
+                // Upload each file
+                IBrowserFile uploadFile = file;
+                try 
+                {
+                    uploadFile = await file.RequestImageFileAsync("image/webp", 1200, 1200);
+                }
+                catch (Exception ex)
+                {
+                    Console.WriteLine($"Image optimization failed for {file.Name}: {ex.Message}");
+                }
+
+                try
+                {
+                    var url = await ProductService.UploadProductImageAsync(uploadFile);
+                    if (!string.IsNullOrWhiteSpace(url)) additionalImages.Add(url);
+                }
+                catch (InvalidOperationException ex)
+                {
+                    additionalImageUploadError = $"{file.Name}: {ex.Message}";
+                }
+                
+                processedCount++;
+                additionalUploadProgress = (int)((processedCount / (double)totalFiles) * 100);
+                StateHasChanged();
+            }
+            
+            isUploadingAdditional = false;
+            additionalUploadProgress = 0;
+            StateHasChanged();
+        }
+    }
+    
+    private async Task RemoveAdditionalImage(int index)
+    {
+        if (index >= 0 && index < additionalImages.Count)
+        {
+            var imageUrl = additionalImages[index];
+            if (!string.IsNullOrEmpty(imageUrl))
+            {
+                await ProductService.DeleteProductImageAsync(imageUrl);
+            }
+            additionalImages.RemoveAt(index);
+            StateHasChanged();
+        }
+    }
+    
+    private async Task HandleDigitalFileSelected(InputFileChangeEventArgs e)
+    {
+        digitalFileError = string.Empty;
+        var file = e.File;
+        if (file != null)
+        {
+            Console.WriteLine($"Arquivo selecionado: {file.Name}, Tamanho: {file.Size} bytes");
+            
+            // Validate file extension - using EndsWith for better WebAssembly compatibility
+            var fileName = file.Name?.ToLowerInvariant() ?? "";
+            
+            if (!fileName.EndsWith(".zip"))
+            {
+                digitalFileError = L.Get("Admin.ProductForm.ZipOnly");
+                StateHasChanged();
+                return;
+            }
+            
+            // CRITICAL: Read the file stream IMMEDIATELY before any StateHasChanged
+            // This prevents the Blazor WebAssembly bug where _blazorFilesById becomes null
+            // after a re-render
+            var maxFileSize = 250 * 1024 * 1024L; // Igual ao limite imposto pela API
+            var originalFileName = file.Name;
+            byte[] fileBytes;
+            
+            try
+            {
+                Console.WriteLine("Iniciando leitura do arquivo...");
+                using var stream = file.OpenReadStream(maxAllowedSize: maxFileSize);
+                using var memoryStream = new MemoryStream();
+                await stream.CopyToAsync(memoryStream);
+                fileBytes = memoryStream.ToArray();
+                Console.WriteLine($"Arquivo lido com sucesso: {fileBytes.Length} bytes");
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Erro ao ler arquivo: {ex.Message}");
+                digitalFileError = string.Format(L.Get("Admin.ProductForm.ErrorReadingFile"), ex.Message);
+                StateHasChanged();
+                return;
+            }
+            
+            // Now it's safe to update UI - file is already in memory
+            isUploadingDigital = true;
+            digitalUploadProgress = 0;
+            StateHasChanged();
+            
+            try
+            {
+                Console.WriteLine("Iniciando upload do arquivo digital...");
+                var (result, error) = await ProductService.UploadDigitalFileFromBytesAsync(fileBytes, originalFileName ?? "file.zip", (progress) => 
+                {
+                    digitalUploadProgress = progress;
+                    InvokeAsync(StateHasChanged);
+                });
+                
+                if (result != null)
+                {
+                    Console.WriteLine($"Upload concluído com sucesso: {result.FilePath}");
+                    product.DigitalFilePath = result.FilePath;
+                }
+                else
+                {
+                    Console.WriteLine($"Upload falhou: {error}");
+                    digitalFileError = error ?? L.Get("Admin.ProductForm.UploadFailedAdmin");
+                }
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Erro durante upload: {ex.Message}");
+                digitalFileError = string.Format(L.Get("Admin.ProductForm.UploadError"), ex.Message);
+            }
+            finally
+            {
+                isUploadingDigital = false;
+                digitalUploadProgress = 0;
+                StateHasChanged();
+            }
+        }
+    }
+    
+    private async Task RemoveDigitalFile()
+    {
+        if (string.IsNullOrEmpty(product.DigitalFilePath)) return;
+
+        isUploadingDigital = true;
+        digitalFileError = string.Empty;
+        try
+        {
+            var removed = IsEdit
+                ? await ProductService.RemoveProductDigitalFileAsync(Id!)
+                : await ProductService.DeleteDigitalFileAsync(product.DigitalFilePath);
+
+            if (removed)
+            {
+                product.DigitalFilePath = null;
+                Snackbar.Add("Arquivo digital removido.", Severity.Success);
+            }
+            else
+            {
+                digitalFileError = "Não foi possível remover o arquivo. Tente novamente.";
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Erro ao remover arquivo digital: {ex.Message}");
+            digitalFileError = "Não foi possível remover o arquivo. Tente novamente.";
+        }
+        finally
+        {
+            isUploadingDigital = false;
+            StateHasChanged();
+        }
+    }
+
+    private async Task DownloadDigitalFile()
+    {
+        if (!IsEdit) return;
+        isDownloadingDigital = true;
+        try
+        {
+            var link = await ProductService.GetAdminDownloadLinkAsync(Id!);
+            if (!string.IsNullOrWhiteSpace(link?.DownloadUrl))
+                await JSRuntime.InvokeVoidAsync("open", link.DownloadUrl, "_blank");
+            else
+                Snackbar.Add("Não foi possível preparar o download do arquivo.", Severity.Error);
+        }
+        finally
+        {
+            isDownloadingDigital = false;
+        }
+    }
+    
+    // Inspection Modal State
+    private string inspectionResult = "";
+    private bool showInspectionModal = false;
+    private bool copySuccess = false;
+
+    private async Task InspectFile()
+    {
+        if (string.IsNullOrEmpty(product.DigitalFilePath)) return;
+
+        var details = await ProductService.InspectFileVersionsAsync(product.DigitalFilePath);
+        if (details != null)
+        {
+           inspectionResult = $"{L.Get("Admin.ProductForm.BackupReportHeader")}\n\n" +
+                         $"{L.Get("Admin.ProductForm.FileLabel")} {details.Path}\n" +
+                         $"{L.Get("Admin.ProductForm.ActiveVersions")} {details.VersionCount}\n" +
+                         $"{L.Get("Admin.ProductForm.DeleteMarkers")} {details.DeleteMarkerCount}\n" +
+                         $"{L.Get("Admin.ProductForm.TotalSize")} {details.TotalSize / 1024.0 / 1024.0:F2} MB\n\n" +
+                         $"{L.Get("Admin.ProductForm.Details")}\n" + string.Join("\n", details.Details);
+            
+           showInspectionModal = true;
+           copySuccess = false;
+        }
+        else
+        {
+            await JSRuntime.InvokeVoidAsync("alert", L.Get("Admin.ProductForm.VerifyDetailsError"));
+        }
+    }
+
+    private void CloseInspectionModal()
+    {
+        showInspectionModal = false;
+    }
+
+    private async Task CopyInspectionResult()
+    {
+        if (!string.IsNullOrEmpty(inspectionResult))
+        {
+            await JSRuntime.InvokeVoidAsync("navigator.clipboard.writeText", inspectionResult);
+            copySuccess = true;
+            StateHasChanged();
+            
+            await Task.Delay(2000);
+            copySuccess = false;
+            StateHasChanged();
+        }
+    }
+
+    
+    private string GetDigitalFileName()
+    {
+        if (string.IsNullOrEmpty(product.DigitalFilePath))
+            return string.Empty;
+        
+        // Extract the original filename from the storage key.
+        var parts = product.DigitalFilePath.Split('/');
+        var filename = parts.LastOrDefault() ?? product.DigitalFilePath;
+        if (filename.Length > 33 && filename[32] == '-' && Guid.TryParseExact(filename[..32], "N", out _))
+        {
+            return filename[33..];
+        }
+
+        // Compatibility with legacy keys that used an underscore prefix.
+        var underscoreIndex = filename.IndexOf('_');
+        if (underscoreIndex > 0)
+        {
+            filename = filename.Substring(underscoreIndex + 1);
+        }
+        return filename;
+    }
+
+    private void EditSelectedCategory()
+    {
+        if (string.IsNullOrEmpty(product.CategoryId)) return;
+        var cat = categories.FirstOrDefault(c => c.Id == product.CategoryId);
+        if (cat != null)
+        {
+            showCategoryModal = true;
+            StartEditCategory(cat);
+        }
+    }
+    
+    private void StartEditCategory(Category cat)
+    {
+        isEditingCategory = true;
+        editingCategoryId = cat.Id;
+        categoryDto = new CreateCategoryDto
+        {
+            Title = cat.Title,
+            Priority = cat.Priority,
+            ImageName = cat.ImageName
+        };
+
+        categoryTranslationModels.Clear();
+        if (cat.Translations != null)
+        {
+            foreach (var kv in cat.Translations)
+            {
+                categoryTranslationModels[kv.Key] = new CategoryTranslation
+                {
+                    Title = kv.Value.Title,
+                    ManualOverride = kv.Value.ManualOverride
+                };
+            }
+        }
+        StateHasChanged();
+    }
+
+    private void CancelEditCategory()
+    {
+        isEditingCategory = false;
+        editingCategoryId = null;
+        categoryDto = new CreateCategoryDto();
+        categoryTranslationModels.Clear();
+        categoryErrorMessage = string.Empty;
+    }
+
+    private async Task HandleSaveCategory()
+    {
+        if (string.IsNullOrWhiteSpace(categoryDto.Title)) return;
+
+        isSavingCategory = true;
+        categoryErrorMessage = string.Empty;
+        
+        try
+        {
+            // Sync translations
+            categoryDto.Translations = new Dictionary<string, CategoryTranslation>();
+            foreach (var kv in categoryTranslationModels)
+            {
+                if (!string.IsNullOrWhiteSpace(kv.Value.Title))
+                {
+                    kv.Value.ManualOverride = true;
+                    categoryDto.Translations[kv.Key] = kv.Value;
+                }
+            }
+
+            if (categoryDto.Translations.Count == 0) categoryDto.Translations = null;
+
+            bool success;
+            if (isEditingCategory && !string.IsNullOrEmpty(editingCategoryId))
+            {
+                var updateDto = new UpdateCategoryDto
+                {
+                    Id = editingCategoryId,
+                    Title = categoryDto.Title,
+                    Priority = categoryDto.Priority,
+                    ImageName = categoryDto.ImageName,
+                    Translations = categoryDto.Translations
+                };
+                success = await ProductService.UpdateCategoryAsync(editingCategoryId, updateDto);
+            }
+            else
+            {
+                var created = await ProductService.CreateCategoryAsync(categoryDto);
+                success = created != null;
+                if (created != null) product.CategoryId = created.Id;
+            }
+
+            if (success)
+            {
+                categories = await ProductService.GetCategoriesAsync(true);
+                if (!isEditingCategory)
+                {
+                    showCategoryModal = false;
+                }
+                CancelEditCategory();
+                Snackbar.Add("Categoria salva com sucesso", Severity.Success);
+            }
+            else
+            {
+                categoryErrorMessage = "Erro ao salvar categoria";
+            }
+        }
+        catch (Exception ex)
+        {
+            categoryErrorMessage = $"Erro: {ex.Message}";
+        }
+        finally
+        {
+            isSavingCategory = false;
+        }
+    }
+
+    private CategoryTranslation GetCategoryTranslationModel(string langCode)
+    {
+        if (!categoryTranslationModels.TryGetValue(langCode, out var model))
+        {
+            model = new CategoryTranslation();
+            categoryTranslationModels[langCode] = model;
+        }
+        return model;
+    }
+
+    private void CancelDeleteCategory()
+    {
+        pendingDeleteCategoryId = null;
+    }
+
+    private async Task ConfirmDeleteCategory()
+    {
+        if (string.IsNullOrEmpty(pendingDeleteCategoryId)) return;
+        
+        var categoryId = pendingDeleteCategoryId;
+        pendingDeleteCategoryId = null;
+        
+        Console.WriteLine($"[DEBUG] ConfirmDeleteCategory for ID: {categoryId}");
+        
+        var success = await ProductService.DeleteCategoryAsync(categoryId);
+        Console.WriteLine($"[DEBUG] Delete result: {success}");
+        
+        if (success)
+        {
+            categories = await ProductService.GetCategoriesAsync(true);
+            if (product.CategoryId == categoryId)
+            {
+                product.CategoryId = null;
+            }
+        }
+        else
+        {
+            categoryErrorMessage = "Erro ao excluir categoria";
+        }
+        StateHasChanged();
+    }
+
+    private async Task HandleSubmit()
+    {
+        // 0. Obter conteúdo do editor de texto rico
+        if (QuillHtml != null)
+        {
+            product.FullDesc = await QuillHtml.GetHTML();
+        }
+
+        // Sync local translation models to product DTO, sanitizing empty ones and marking as ManualOverride
+        product.Translations = new Dictionary<string, ProductTranslation>();
+        foreach (var kvp in translationModels)
+        {
+            var t = kvp.Value;
+            // Only include if any field has content
+            if (!string.IsNullOrWhiteSpace(t.Title) || !string.IsNullOrWhiteSpace(t.Description) || !string.IsNullOrWhiteSpace(t.FullDesc))
+            {
+                t.ManualOverride = true; // CRITICAL: Ensure override is set for manual entries
+                product.Translations[kvp.Key] = t;
+            }
+        }
+
+        if (product.Translations.Count == 0) product.Translations = null;
+
+        // 1. Validar se produto físico tem dimensões
+        if (!product.IsDigital && !product.IsSubscription)
+        {
+            if (product.Weight <= 0 || product.Width <= 0 || product.Height <= 0 || product.Length <= 0)
+            {
+                await JSRuntime.InvokeVoidAsync("alert", L.Get("Admin.ProductForm.PhysicalDimensionsRequired"));
+                return;
+            }
+        }
+        else
+        {
+            // Opcional: Zerar dimensões se for digital/assinatura para limpar o banco
+            product.Weight = 0;
+            product.Width = 0;
+            product.Height = 0;
+            product.Length = 0;
+        }
+
+        isSubmitting = true;
+        // Reset success state just in case
+        showSuccessMessage = false; 
+        
+        try
+        {
+            // Sync additional images to product before saving
+            product.Images = additionalImages.Count > 0 ? new List<string>(additionalImages) : null;
+            
+            bool success;
+            if (IsEdit)
+            {
+                success = await ProductService.UpdateProductAsync(Id!, product);
+            }
+            else
+            {
+                var created = await ProductService.CreateProductAsync(product);
+                success = created != null;
+            }
+
+            if (success)
+            {
+                if (!string.IsNullOrWhiteSpace(pendingMainImageDeletion))
+                {
+                    await ProductService.DeleteProductImageAsync(pendingMainImageDeletion);
+                    pendingMainImageDeletion = null;
+                }
+                // Show success via MudBlazor Snackbar with translation status
+                var successMessage = L.Get("Admin.ProductForm.SuccessMessage");
+                var translationMessage = product.SkipTranslation 
+                    ? L.Get("Admin.ProductForm.TranslationSkipped") 
+                    : L.Get("Admin.ProductForm.TranslationEnqueued");
+                
+                Snackbar.Add($"{successMessage} {translationMessage}", Severity.Success);
+                NavigateBack();
+            }
+            else
+            {
+                Snackbar.Add("Não foi possível salvar o produto. Tente novamente.", Severity.Error);
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Erro ao salvar produto: {ex.Message}");
+            Snackbar.Add("Não foi possível salvar o produto. Verifique os campos e tente novamente.", Severity.Error);
+        }
+        finally
+        {
+            isSubmitting = false;
+        }
+    }
+
+    private string GetDurationText(int months) => months switch
+    {
+        1 => L.Get("Admin.ProductForm.Duration1MonthShort"),
+        3 => L.Get("Admin.ProductForm.Duration3MonthsShort"),
+        6 => L.Get("Admin.ProductForm.Duration6MonthsShort"),
+        12 => L.Get("Admin.ProductForm.Duration1YearShort"),
+        _ => string.Format(L.Get("Admin.ProductForm.DurationMonthsFormat"), months)
+    };
+
+    private ProductTranslation GetTranslationModel(string langCode)
+    {
+        if (!translationModels.TryGetValue(langCode, out var model))
+        {
+            model = new ProductTranslation();
+            translationModels[langCode] = model;
+        }
+        return model;
+    }
+
+    private async Task CopyRichToTranslation(string langCode)
+    {
+        if (QuillHtml == null) return;
+        var html = await QuillHtml.GetHTML();
+        var model = GetTranslationModel(langCode);
+        model.FullDesc = html;
+        StateHasChanged();
+        Snackbar.Add(string.Format(L.Get("Admin.ProductForm.DescriptionCopied"), langCode), Severity.Info);
+    }
+
+    private void CopyTitleToTranslation(string langCode)
+    {
+        if (string.IsNullOrWhiteSpace(product.Title)) return;
+        var model = GetTranslationModel(langCode);
+        model.Title = product.Title;
+        StateHasChanged();
+        Snackbar.Add($"Título copiado para {langCode}", Severity.Info);
+    }
+
+    private void CopyDescriptionToTranslation(string langCode)
+    {
+        if (string.IsNullOrWhiteSpace(product.Description)) return;
+        var model = GetTranslationModel(langCode);
+        model.Description = product.Description;
+        StateHasChanged();
+        Snackbar.Add($"Descrição curta copiada para {langCode}", Severity.Info);
+    }
+}
+

@@ -1,0 +1,415 @@
+@page "/shop"
+@using BlazorClient.Models
+@using BlazorClient.Core.Services
+@implements IDisposable
+@inject IProductService ProductService
+@inject ICartService CartService
+@inject NavigationManager Navigation
+@inject IJSRuntime JSRuntime
+@inject IClientLocaleService LocaleService
+@inject ILocalizationService L
+
+<MudContainer MaxWidth="MaxWidth.ExtraLarge" Class="mt-8 mb-20 relative">
+    <section class="ic-catalog-intro">
+        <div>
+            <span class="ic-admin-kicker">Coleção IdealCreative</span>
+            <MudBreadcrumbs Items="_breadcrumbs" Class="pa-0 mb-2" />
+            <MudText Typo="Typo.h1">Escolha algo<br /><em>com personalidade.</em></MudText>
+            <MudText Typo="Typo.body1">Peças autorais e arquivos prontos para tirar sua ideia do papel.</MudText>
+        </div>
+        <div class="ic-catalog-intro-side"><span class="ic-catalog-count">@pagination.TotalItems <small>itens<br />disponíveis</small></span><MudHidden Breakpoint="Breakpoint.MdAndUp"><MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="@(() => _drawerOpen = !_drawerOpen)" StartIcon="@Icons.Material.Filled.FilterList" Class="ic-admin-primary-action">Filtros</MudButton></MudHidden></div>
+    </section>
+
+    <MudGrid Spacing="6">
+        <!-- Sidebar (Sticky Desktop) -->
+        <MudItem xs="12" md="3" Class="d-none d-md-block">
+             <aside class="sidebar-sticky">
+                <MudPaper Class="glass-panel rounded-xl pa-6 border-0" Elevation="0">
+                     <div class="d-flex align-center gap-2 mb-6">
+                         <MudIcon Icon="@Icons.Material.Filled.Tune" Size="Size.Small" Color="Color.Primary" />
+                         <MudText Typo="Typo.h6" Class="fw-bold">Filtros</MudText>
+                     </div>
+
+                     <!-- Search -->
+                     <MudTextField T="string" @bind-Value="searchTerm" Placeholder="@L.Get("Shop.InstantSearch")" 
+                                   Adornment="Adornment.Start" AdornmentIcon="@Icons.Material.Filled.Search"
+                                   Variant="Variant.Outlined" Margin="Margin.Dense" Class="mb-6 rounded-lg bg-white" 
+                                   OnDebounceIntervalElapsed="OnSearchChanged" DebounceInterval="500" />
+                     
+                     <MudDivider Class="my-6" />
+                     
+                     <!-- Price Range -->
+                     <MudText Typo="Typo.subtitle1" Class="fw-bold mb-3">Preço</MudText>
+                     <div class="d-flex gap-2 align-center mb-2">
+                         <MudNumericField @bind-Value="minPrice" Label="Min" Variant="Variant.Outlined" Margin="Margin.Dense" HideSpinButtons="true" Class="bg-white rounded" OnBlur="OnPriceChanged" />
+                         <span class="text-muted">-</span>
+                         <MudNumericField @bind-Value="maxPrice" Label="Max" Variant="Variant.Outlined" Margin="Margin.Dense" HideSpinButtons="true" Class="bg-white rounded" OnBlur="OnPriceChanged" />
+                     </div>
+                     <MudButton OnClick="OnPriceChanged" Variant="Variant.Filled" Color="Color.Primary" FullWidth="true" Class="rounded-pill shadow-sm" Size="Size.Small">Aplicar</MudButton>
+
+                     <MudDivider Class="my-6" />
+
+                     <!-- Categories -->
+                     <MudText Typo="Typo.subtitle1" Class="fw-bold mb-3">@L.Get("Shop.Categories")</MudText>
+                     <div class="d-flex flex-column gap-1 mb-6">
+                         <MudButton Variant="@(selectedCategoryId == null ? Variant.Filled : Variant.Text)" 
+                                    Color="@(selectedCategoryId == null ? Color.Primary : Color.Default)"
+                                    OnClick="() => FilterByCategory(null)" Class="justify-start rounded-pill px-4" Size="Size.Small">
+                             @L.Get("Shop.AllCategories")
+                         </MudButton>
+                         @if (categories != null)
+                         {
+                             foreach (var cat in categories)
+                             {
+                                 <MudButton Variant="@(selectedCategoryId == cat.Id ? Variant.Filled : Variant.Text)" 
+                                            Color="@(selectedCategoryId == cat.Id ? Color.Primary : Color.Default)"
+                                            OnClick="() => FilterByCategory(cat.Id)" Class="justify-start rounded-pill px-4" Size="Size.Small">
+                                     @cat.GetTranslatedTitle(LocaleService.CurrentLocale.Language)
+                                 </MudButton>
+                             }
+                         }
+                     </div>
+
+                     <MudDivider Class="my-6" />
+
+                     <!-- Tags -->
+                     <MudText Typo="Typo.subtitle1" Class="fw-bold mb-3">@L.Get("Shop.Tags")</MudText>
+                     <div class="d-flex flex-wrap gap-2">
+                         <MudChip T="string" OnClick="() => FilterByTag(null)"
+                                  Variant="@(string.IsNullOrEmpty(TagParam) ? Variant.Filled : Variant.Outlined)"
+                                  Color="Color.Primary" Size="Size.Small" Class="chip-filter">@L.Get("Shop.AllTags")</MudChip>
+                         @if (tags != null)
+                         {
+                             foreach (var tag in tags)
+                             {
+                                 <MudChip T="string" OnClick="() => FilterByTag(tag.Title)"
+                                          Variant="@(TagParam == tag.Title ? Variant.Filled : Variant.Outlined)"
+                                          Color="Color.Primary" Size="Size.Small" Class="chip-filter">
+                                     @tag.GetTranslatedTitle(LocaleService.CurrentLocale.Language)
+                                 </MudChip>
+                             }
+                         }
+                     </div>
+                </MudPaper>
+             </aside>
+        </MudItem>
+
+        <!-- Product Grid -->
+        <MudItem xs="12" md="9">
+            <!-- Active Filters Chips -->
+            @if (HasActiveFilters)
+            {
+                <div class="d-flex gap-2 flex-wrap mb-6">
+                    @if (!string.IsNullOrEmpty(selectedCategoryId))
+                    {
+                        <MudChip T="string" Color="Color.Primary" OnClose="() => FilterByCategory(null)">Categoria: @GetCategoryName(selectedCategoryId)</MudChip>
+                    }
+                    @if (minPrice > 0 || maxPrice < 5000)
+                    {
+                         <MudChip T="string" Color="Color.Primary" OnClose="ResetPrice">Preço: @minPrice - @maxPrice</MudChip>
+                    }
+                    @if (!string.IsNullOrEmpty(TagParam))
+                    {
+                         <MudChip T="string" Color="Color.Primary" OnClose="() => FilterByTag(null)">Tag: @TagParam</MudChip>
+                    }
+                     @if (!string.IsNullOrEmpty(searchTerm) && searchTerm != TagParam)
+                    {
+                         <MudChip T="string" Color="Color.Primary" OnClose="() => { searchTerm = string.Empty; OnSearchChanged(); }">Busca: @searchTerm</MudChip>
+                    }
+                </div>
+            }
+            
+            <MudText Typo="Typo.caption" Class="text-muted d-block mb-4">
+                Mostrando @(pagination.TotalItems) produtos
+            </MudText>
+
+            <MudGrid Spacing="4">
+                @if (isLoading)
+                {
+                    <BlazorClient.Components.SkeletonLoader Type="BlazorClient.Components.SkeletonLoader.LoaderType.ProductGrid" Count="9" ColLg="4" ColMd="4" />
+                }
+                else if (products != null && products.Any())
+                {
+                    var delay = 0;
+                    @foreach (var product in products)
+                    {
+                        <MudItem xs="6" sm="6" md="4" Class="@($"animate-fade-up delay-{delay}")">
+                            <div class="h-100 hover-lift">
+                                <BlazorClient.Components.ProductCard Product="@product" />
+                            </div>
+                        </MudItem>
+                         if (delay < 5) delay++;
+                    }
+                }
+                else
+                {
+                    <MudItem xs="12" Class="py-16 d-flex flex-column align-center justify-center text-center">
+                        <MudIcon Icon="@Icons.Material.Filled.SearchOff" Size="Size.Large" Class="mb-4 text-muted" Style="font-size: 4rem;" />
+                        <MudText Typo="Typo.h5" Class="fw-bold text-muted">Nenhum produto encontrado</MudText>
+                        <MudText Typo="Typo.body1" Class="text-muted mb-6">Tente ajustar seus filtros ou busca.</MudText>
+                        <MudButton Variant="Variant.Outlined" Color="Color.Primary" OnClick="ResetAllFilters">Limpar Filtros</MudButton>
+                    </MudItem>
+                }
+            </MudGrid>
+
+            @if (pagination.TotalPages > 1)
+            {
+                <div class="d-flex justify-center mt-12">
+                    <MudPagination Color="Color.Primary" Count="@pagination.TotalPages" Selected="@pagination.CurrentPage" SelectedChanged="ChangePage" 
+                                   Variant="Variant.Outlined" Class="pagination-premium" />
+                </div>
+            }
+        </MudItem>
+    </MudGrid>
+</MudContainer>
+
+<MudDrawer @bind-Open="@_drawerOpen" Anchor="Anchor.Right" Elevation="1" Variant="DrawerVariant.Temporary">
+    <MudDrawerHeader>
+        <MudText Typo="Typo.h6">Filtros</MudText>
+    </MudDrawerHeader>
+    <MudNavMenu Class="pa-4">
+         <!-- Mobile Filter Content (Simplified) -->
+         <MudTextField T="string" @bind-Value="searchTerm" Placeholder="Buscar..." Variant="Variant.Outlined" Margin="Margin.Dense" OnDebounceIntervalElapsed="OnSearchChanged" DebounceInterval="500" />
+         <MudDivider Class="my-4" />
+         <MudText Typo="Typo.subtitle2" Class="mb-2">Categorias</MudText>
+         @if (categories != null)
+         {
+             foreach (var cat in categories)
+             {
+                 <MudButton Variant="@(selectedCategoryId == cat.Id ? Variant.Filled : Variant.Text)" 
+                            Color="@(selectedCategoryId == cat.Id ? Color.Primary : Color.Default)"
+                            OnClick="() => FilterByCategory(cat.Id)" Class="justify-start" FullWidth="true">
+                     @cat.GetTranslatedTitle(LocaleService.CurrentLocale.Language)
+                 </MudButton>
+             }
+         }
+         <MudDivider Class="my-4" />
+         <MudText Typo="Typo.subtitle2" Class="mb-2">Tags</MudText>
+         <div class="d-flex flex-wrap gap-2">
+             @if (tags != null)
+             {
+                 foreach (var tag in tags)
+                 {
+                     <MudChip T="string" OnClick="() => FilterByTag(tag.Title)"
+                              Variant="@(TagParam == tag.Title ? Variant.Filled : Variant.Outlined)"
+                              Color="Color.Primary" Size="Size.Small">
+                         @tag.GetTranslatedTitle(LocaleService.CurrentLocale.Language)
+                     </MudChip>
+                 }
+             }
+         </div>
+    </MudNavMenu>
+</MudDrawer>
+
+<style>
+    .animate-fade-up {
+        animation: fadeUp 0.5s ease-out forwards;
+        opacity: 0;
+        transform: translateY(20px);
+    }
+    .delay-0 { animation-delay: 0ms; }
+    .delay-1 { animation-delay: 100ms; }
+    .delay-2 { animation-delay: 200ms; }
+    .delay-3 { animation-delay: 300ms; }
+    .delay-4 { animation-delay: 400ms; }
+    .delay-5 { animation-delay: 500ms; }
+
+    @@keyframes fadeUp {
+        to { opacity: 1; transform: translateY(0); }
+    }
+</style>
+
+@code {
+    [SupplyParameterFromQuery] public int? Page { get; set; }
+    [SupplyParameterFromQuery(Name = "category")] public string? CategoryIdParam { get; set; }
+    [SupplyParameterFromQuery(Name = "tag")] public string? TagParam { get; set; }
+    [SupplyParameterFromQuery(Name = "minPrice")] public decimal? MinPriceParam { get; set; }
+    [SupplyParameterFromQuery(Name = "maxPrice")] public decimal? MaxPriceParam { get; set; }
+
+    private List<Product> products = new();
+    private List<Category> categories = new();
+    private List<Tag> tags = new();
+    private PaginationData pagination = new PaginationData { CurrentPage = 1, PageSize = 9, TotalPages = 1 };
+    private bool isLoading = true;
+    private string? selectedCategoryId;
+    private string searchTerm = "";
+    private decimal minPrice = 0;
+    private decimal maxPrice = 5000;
+    private bool _drawerOpen = false;
+    private Dictionary<int, string?> pageCursors = new();
+
+    private List<BreadcrumbItem> _breadcrumbs = new();
+
+    private bool HasActiveFilters => !string.IsNullOrEmpty(selectedCategoryId) || !string.IsNullOrEmpty(TagParam) || (minPrice > 0 || maxPrice < 5000) || (!string.IsNullOrEmpty(searchTerm) && searchTerm != TagParam);
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LocaleService.EnsureInitializedAsync();
+        L.OnLanguageChanged += HandleLanguageChanged;
+        
+        _breadcrumbs = new List<BreadcrumbItem>
+        {
+            new BreadcrumbItem(L.Get("Nav.Home"), href: "/"),
+            new BreadcrumbItem(L.Get("Nav.Shop"), href: null, disabled: true)
+        };
+
+        await LoadInitialData();
+    }
+    
+    private string? _lastCategoryId;
+    private string? _lastTag;
+    private decimal? _lastMinPrice;
+    private decimal? _lastMaxPrice;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        var targetPage = Page ?? 1;
+        
+        bool categoryChanged = CategoryIdParam != _lastCategoryId;
+        bool tagChanged = TagParam != _lastTag;
+        bool minPriceChanged = MinPriceParam != _lastMinPrice;
+        bool maxPriceChanged = MaxPriceParam != _lastMaxPrice;
+        bool pageChanged = targetPage != pagination.CurrentPage;
+
+        if (categoryChanged || tagChanged || minPriceChanged || maxPriceChanged || pageChanged || (!products.Any() && isLoading))
+        {
+            _lastCategoryId = CategoryIdParam;
+            _lastTag = TagParam;
+            _lastMinPrice = MinPriceParam;
+            _lastMaxPrice = MaxPriceParam;
+            
+            selectedCategoryId = CategoryIdParam;
+            minPrice = MinPriceParam ?? 0;
+            maxPrice = MaxPriceParam ?? 5000;
+            
+            await LoadProducts(targetPage);
+        }
+    }
+
+    private async Task LoadInitialData()
+    {
+        categories = await ProductService.GetCategoriesAsync();
+        tags = await ProductService.GetTagsAsync(true);
+    }
+
+    private async Task LoadProducts(int page)
+    {
+        isLoading = true;
+        StateHasChanged();
+
+        try
+        {
+            string? lastDocId = null;
+            if (page > 1 && pageCursors.ContainsKey(page - 1))
+            {
+                lastDocId = pageCursors[page - 1];
+            }
+
+            string? effectiveSearch = !string.IsNullOrEmpty(searchTerm) ? searchTerm : null;
+            
+            var response = await ProductService.GetProductsAsync(
+                page: page, 
+                pageSize: 9, 
+                categoryId: selectedCategoryId, 
+                tag: TagParam, 
+                lastDocId: lastDocId, 
+                currency: LocaleService.CurrentLocale.Currency, 
+                search: effectiveSearch, 
+                language: LocaleService.CurrentLocale.Language,
+                minPrice: minPrice > 0 ? minPrice : null,
+                maxPrice: maxPrice < 5000 ? maxPrice : null);
+                
+            products = response.Items;
+            pagination = response.Pagination;
+            
+            if (pagination.LastDocId != null) pageCursors[page] = pagination.LastDocId;
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error: {ex.Message}");
+        }
+        finally
+        {
+            isLoading = false;
+            StateHasChanged();
+        }
+    }
+
+    private void NavigateWithFilters(int page = 1, string? category = "%SAME%", string? tag = "%SAME%", decimal? min = -1, decimal? max = -1)
+    {
+        var newCategory = category == "%SAME%" ? CategoryIdParam : category;
+        var newTag = tag == "%SAME%" ? TagParam : tag;
+        var newMin = min == -1 ? MinPriceParam : min;
+        var newMax = max == -1 ? MaxPriceParam : max;
+
+        var query = new Dictionary<string, object?>
+        {
+            ["page"] = page,
+            ["category"] = newCategory,
+            ["tag"] = newTag,
+            ["minPrice"] = newMin > 0 ? newMin : null,
+            ["maxPrice"] = newMax < 5000 ? newMax : null
+        };
+
+        Navigation.NavigateTo(Navigation.GetUriWithQueryParameters(query));
+    }
+    
+    // Automatic price filtering via URL sync
+    private void OnPriceChanged()
+    {
+        NavigateWithFilters(min: minPrice, max: maxPrice);
+    }
+    
+    private void OnSearchChanged()
+    {
+         _ = LoadProducts(1);
+    }
+    
+    private void ResetPrice()
+    {
+        NavigateWithFilters(min: 0, max: 5000);
+    }
+
+    private void ResetAllFilters()
+    {
+        _lastCategoryId = null;
+        _lastTag = null;
+        _lastMinPrice = null;
+        _lastMaxPrice = null;
+        searchTerm = "";
+        Navigation.NavigateTo("/shop");
+    }
+
+    private void FilterByCategory(string? categoryId)
+    {
+        NavigateWithFilters(category: categoryId);
+    }
+    
+    private void FilterByTag(string? tag)
+    {
+        NavigateWithFilters(tag: tag);
+    }
+    
+    private void ChangePage(int page)
+    {
+        NavigateWithFilters(page: page);
+    }
+    
+    private string GetCategoryName(string id)
+    {
+        return categories.FirstOrDefault(c => c.Id == id)?.GetTranslatedTitle(LocaleService.CurrentLocale.Language) ?? id;
+    }
+
+    private async void HandleLanguageChanged()
+    {
+        await InvokeAsync(async () => {
+            await LoadProducts(pagination.CurrentPage);
+            StateHasChanged();
+        });
+    }
+
+    public void Dispose()
+    {
+        L.OnLanguageChanged -= HandleLanguageChanged;
+    }
+}

@@ -1,0 +1,45 @@
+@using BlazorClient.Core.Interfaces
+@inject IClientLocaleService LocaleService
+@inject ILocalizationService L
+
+@using BlazorClient.Core.Theme
+
+<MudThemeProvider Theme="YnexTheme.DefaultTheme" />
+<MudPopoverProvider />
+<MudDialogProvider />
+<MudSnackbarProvider />
+
+<CascadingAuthenticationState>
+    <Router AppAssembly="@typeof(App).Assembly">
+        <Found Context="routeData">
+            <AuthorizeRouteView RouteData="@routeData" DefaultLayout="@typeof(MainLayout)">
+                <Authorizing>
+                    <div class="text-center mt-5">
+                       <div class="spinner-border text-primary" role="status"></div>
+                    </div>
+                </Authorizing>
+                <NotAuthorized>
+                    @if (context.User.Identity?.IsAuthenticated != true)
+                    {
+                        <RedirectToLogin />
+                    }
+                    else
+                    {
+                        <p role="alert">@L.Get("NotFound.NotAuthorized")</p>
+                    }
+                </NotAuthorized>
+            </AuthorizeRouteView>
+            <FocusOnNavigate RouteData="@routeData" Selector="h1" />
+        </Found>
+        <NotFound>
+            <PageTitle>@L.Get("NotFound.Title")</PageTitle>
+            <LayoutView Layout="@typeof(MainLayout)">
+                <p role="alert">@L.Get("NotFound.Message")</p>
+            </LayoutView>
+        </NotFound>
+    </Router>
+</CascadingAuthenticationState>
+
+@code {
+    // Initialization is now handled in Program.cs to prevent deadlocks
+}
