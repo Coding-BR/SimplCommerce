@@ -21,7 +21,7 @@ public sealed class StorageController(IntegrationSettingsStore integrations, ISt
     [Authorize(Roles = "Admin")]
     [RequestSizeLimit(250 * 1024 * 1024)]
     public Task<IActionResult> DigitalFile(IFormFile file, CancellationToken ct)
-        => IsSafeDigitalFile(file) ? Upload(file, "products/digital", ct) : Task.FromResult<IActionResult>(BadRequest(new { message = "Envie um arquivo ZIP válido." }));
+        => IsSafeDigitalFile(file) ? Upload(file, "products/digital", ct) : Task.FromResult<IActionResult>(BadRequest(new { message = "Envie um arquivo digital válido (.zip, .rar, .7z, .stl, .dxf, .cdr, .pdf, .svg, .obj, .3mf)." }));
 
     [HttpPost("/api/storage/upload")]
     [Authorize(Roles = "Admin")]
@@ -204,7 +204,8 @@ public sealed class StorageController(IntegrationSettingsStore integrations, ISt
         var allowedContentType = contentType is "image/jpeg" or "image/jpg" or "image/png" or "image/webp" or "image/gif" or "image/avif";
         return allowedExtension && (allowedContentType || string.IsNullOrEmpty(contentType) || contentType == "application/octet-stream");
     }
-    private static bool IsSafeDigitalFile(IFormFile? file) => file is not null && file.Length > 0 && string.Equals(Path.GetExtension(file.FileName), ".zip", StringComparison.OrdinalIgnoreCase);
+    private static readonly string[] AllowedDigitalExtensions = [".zip", ".rar", ".7z", ".stl", ".dxf", ".cdr", ".pdf", ".svg", ".obj", ".3mf"];
+    private static bool IsSafeDigitalFile(IFormFile? file) => file is not null && file.Length > 0 && AllowedDigitalExtensions.Contains(Path.GetExtension(file.FileName), StringComparer.OrdinalIgnoreCase);
 
     private static string? NormalizePath(string? path, bool allowEmpty)
     {

@@ -447,8 +447,8 @@
                                                         }
                                                         else
                                                         {
-                                                            <InputFile OnChange="HandleDigitalFileSelected" class="form-control" accept=".zip" />
-                                                            <small class="text-muted d-block mt-2">@L.Get("Admin.ProductForm.FileFormatNote")</small>
+                                                            <InputFile OnChange="HandleDigitalFileSelected" class="form-control" accept=".zip,.rar,.7z,.stl,.dxf,.cdr,.pdf,.svg,.obj,.3mf" />
+                                                            <small class="text-muted d-block mt-2">Formatos aceitos: .ZIP, .RAR, .7Z, .STL, .DXF, .CDR, .PDF, .SVG, .OBJ, .3MF (máx. 250MB)</small>
                                                             @if (!string.IsNullOrEmpty(digitalFileError))
                                                             {
                                                                 <div class="alert alert-danger mt-2">@digitalFileError</div>
@@ -983,71 +983,55 @@
         var file = e.File;
         if (file != null)
         {
-            Console.WriteLine($"Arquivo selecionado: {file.Name}, Tamanho: {file.Size} bytes");
+            Console.WriteLine($"Arquivo digital selecionado: {file.Name}, Tamanho: {file.Size} bytes");
             
-            // Validate file extension - using EndsWith for better WebAssembly compatibility
             var fileName = file.Name?.ToLowerInvariant() ?? "";
+            var allowedExts = new[] { ".zip", ".rar", ".7z", ".stl", ".dxf", ".cdr", ".pdf", ".svg", ".obj", ".3mf" };
+            var ext = Path.GetExtension(fileName);
             
-            if (!fileName.EndsWith(".zip"))
+            if (string.IsNullOrEmpty(ext) || !allowedExts.Contains(ext))
             {
-                digitalFileError = L.Get("Admin.ProductForm.ZipOnly");
+                digitalFileError = "Envie um arquivo digital nos formatos: .ZIP, .RAR, .7Z, .STL, .DXF, .CDR, .PDF, .SVG, .OBJ, .3MF.";
                 StateHasChanged();
                 return;
             }
-            
-            // CRITICAL: Read the file stream IMMEDIATELY before any StateHasChanged
-            // This prevents the Blazor WebAssembly bug where _blazorFilesById becomes null
-            // after a re-render
-            var maxFileSize = 250 * 1024 * 1024L; // Igual ao limite imposto pela API
-            var originalFileName = file.Name;
-            byte[] fileBytes;
-            
-            try
+
+            const long maxFileSize = 250 * 1024 * 1024L;
+            if (file.Size > maxFileSize)
             {
-                Console.WriteLine("Iniciando leitura do arquivo...");
-                using var stream = file.OpenReadStream(maxAllowedSize: maxFileSize);
-                using var memoryStream = new MemoryStream();
-                await stream.CopyToAsync(memoryStream);
-                fileBytes = memoryStream.ToArray();
-                Console.WriteLine($"Arquivo lido com sucesso: {fileBytes.Length} bytes");
-            }
-            catch (Exception ex)
-            {
-                Console.WriteLine($"Erro ao ler arquivo: {ex.Message}");
-                digitalFileError = string.Format(L.Get("Admin.ProductForm.ErrorReadingFile"), ex.Message);
+                digitalFileError = "O arquivo excede o limite máximo permitido de 250 MB.";
                 StateHasChanged();
                 return;
             }
-            
-            // Now it's safe to update UI - file is already in memory
+
             isUploadingDigital = true;
             digitalUploadProgress = 0;
             StateHasChanged();
             
             try
             {
-                Console.WriteLine("Iniciando upload do arquivo digital...");
-                var (result, error) = await ProductService.UploadDigitalFileFromBytesAsync(fileBytes, originalFileName ?? "file.zip", (progress) => 
+                Console.WriteLine("Iniciando upload do arquivo digital via stream...");
+                var result = await ProductService.UploadDigitalFileAsync(file, (progress) =>
                 {
                     digitalUploadProgress = progress;
                     InvokeAsync(StateHasChanged);
                 });
                 
-                if (result != null)
+                if (result != null && !string.IsNullOrEmpty(result.FilePath))
                 {
-                    Console.WriteLine($"Upload concluído com sucesso: {result.FilePath}");
+                    Console.WriteLine($"Upload do arquivo digital concluído: {result.FilePath}");
                     product.DigitalFilePath = result.FilePath;
+                    Snackbar.Add($"Arquivo \"{file.Name}\" anexado com sucesso!", Severity.Success);
                 }
                 else
                 {
-                    Console.WriteLine($"Upload falhou: {error}");
-                    digitalFileError = error ?? L.Get("Admin.ProductForm.UploadFailedAdmin");
+                    digitalFileError = "Erro ao enviar o arquivo digital. Confirme o tamanho/formato e tente novamente.";
                 }
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"Erro durante upload: {ex.Message}");
-                digitalFileError = string.Format(L.Get("Admin.ProductForm.UploadError"), ex.Message);
+                Console.WriteLine($"Erro durante upload digital: {ex.Message}");
+                digitalFileError = $"Erro de upload: {ex.Message}";
             }
             finally
             {
