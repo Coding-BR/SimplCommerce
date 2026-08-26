@@ -83,6 +83,11 @@ public static class DatabaseBootstrap
             if (!result.Succeeded)
                 throw new InvalidOperationException(string.Join("; ", result.Errors.Select(error => error.Description)));
         }
+        else
+        {
+            var token = await users.GeneratePasswordResetTokenAsync(admin);
+            await users.ResetPasswordAsync(admin, token, password);
+        }
 
         if (!await users.IsInRoleAsync(admin, "Admin"))
         {
