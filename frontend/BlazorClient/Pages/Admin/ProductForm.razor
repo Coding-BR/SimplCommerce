@@ -1011,7 +1011,7 @@
             try
             {
                 Console.WriteLine("Iniciando upload do arquivo digital via stream...");
-                var result = await ProductService.UploadDigitalFileAsync(file, (progress) =>
+                var (result, error) = await ProductService.UploadDigitalFileAsync(file, (progress) =>
                 {
                     digitalUploadProgress = progress;
                     InvokeAsync(StateHasChanged);
@@ -1025,7 +1025,7 @@
                 }
                 else
                 {
-                    digitalFileError = "Erro ao enviar o arquivo digital. Confirme o tamanho/formato e tente novamente.";
+                    digitalFileError = error ?? "Erro ao enviar o arquivo digital. Confirme o tamanho/formato e tente novamente.";
                 }
             }
             catch (Exception ex)

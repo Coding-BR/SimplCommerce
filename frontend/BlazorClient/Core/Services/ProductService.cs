@@ -525,13 +525,12 @@ public class ProductService : IProductService
         return false;
     }
 
-    public async Task<DigitalFileUploadResponse?> UploadDigitalFileAsync(Microsoft.AspNetCore.Components.Forms.IBrowserFile file, Action<int>? onProgress = null)
+    public async Task<(DigitalFileUploadResponse? Response, string? Error)> UploadDigitalFileAsync(Microsoft.AspNetCore.Components.Forms.IBrowserFile file, Action<int>? onProgress = null)
     {
         try
         {
             using var content = new MultipartFormDataContent();
-            // 100MB limit for digital files
-            var maxFileSize = 100 * 1024 * 1024L;
+            var maxFileSize = 250 * 1024 * 1024L;
             
             var fileStream = file.OpenReadStream(maxAllowedSize: maxFileSize);
             var totalBytes = file.Size;
@@ -542,21 +541,32 @@ public class ProductService : IProductService
             });
             
             var fileContent = new StreamContent(progressStream);
-            fileContent.Headers.ContentType = new MediaTypeHeaderValue("application/zip");
+            var ext = Path.GetExtension(file.Name).ToLowerInvariant();
+            var contentType = ext switch
+            {
+                ".zip" => "application/zip",
+                ".rar" => "application/vnd.rar",
+                ".7z" => "application/x-7z-compressed",
+                ".pdf" => "application/pdf",
+                _ => "application/octet-stream"
+            };
+            fileContent.Headers.ContentType = new MediaTypeHeaderValue(contentType);
             content.Add(fileContent, "file", file.Name);
 
             var response = await AuthClient.PostAsync("api/upload/digital-file", content);
             if (response.IsSuccessStatusCode)
             {
-                return await response.Content.ReadFromJsonAsync<DigitalFileUploadResponse>();
+                var res = await response.Content.ReadFromJsonAsync<DigitalFileUploadResponse>();
+                return (res, null);
             }
-            Console.WriteLine($"Upload failed: {await response.Content.ReadAsStringAsync()}");
-            return null;
+            var errStr = await response.Content.ReadAsStringAsync();
+            Console.WriteLine($"Upload failed: {response.StatusCode} - {errStr}");
+            return (null, $"Falha ({response.StatusCode}): {ExtractUploadError(errStr)}");
         }
         catch (Exception ex)
         {
             Console.WriteLine($"Error uploading digital file: {ex.Message}");
-            return null;
+            return (null, ex.Message);
         }
     }
 

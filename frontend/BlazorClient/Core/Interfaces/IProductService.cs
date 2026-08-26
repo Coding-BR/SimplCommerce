@@ -24,7 +24,7 @@ public interface IProductService
     Task<bool> DeleteCategoryAsync(string id);
     
     // Digital file methods
-    Task<DigitalFileUploadResponse?> UploadDigitalFileAsync(Microsoft.AspNetCore.Components.Forms.IBrowserFile file, Action<int>? onProgress = null);
+    Task<(DigitalFileUploadResponse? Response, string? Error)> UploadDigitalFileAsync(Microsoft.AspNetCore.Components.Forms.IBrowserFile file, Action<int>? onProgress = null);
     Task<(DigitalFileUploadResponse? Response, string? Error)> UploadDigitalFileFromBytesAsync(byte[] fileBytes, string fileName, Action<int>? onProgress = null);
     Task<bool> DeleteDigitalFileAsync(string path);
     Task<bool> RemoveProductDigitalFileAsync(string productId);
