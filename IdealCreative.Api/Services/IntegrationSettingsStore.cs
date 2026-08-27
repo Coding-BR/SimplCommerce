@@ -153,18 +153,60 @@ public sealed class IntegrationSettingsStore(
 
     private string? UpdateSecret(string? current, string? replacement, bool clear)
     {
-        // An encrypted empty value records an intentional clear and prevents
-        // an environment fallback from silently restoring the old credential.
-        if (clear) return protector.Protect(string.Empty);
-        return string.IsNullOrWhiteSpace(replacement) ? current : protector.Protect(replacement.Trim());
+        if (clear) return Protect(string.Empty);
+        return string.IsNullOrWhiteSpace(replacement) ? current : Protect(replacement.Trim());
     }
 
     private string Secret(string? protectedValue, string? fallback)
     {
         if (string.IsNullOrWhiteSpace(protectedValue)) return fallback ?? string.Empty;
-        try { return protector.Unprotect(protectedValue); }
-        catch { return string.Empty; }
+        var decrypted = Unprotect(protectedValue);
+        return string.IsNullOrWhiteSpace(decrypted) ? (fallback ?? string.Empty) : decrypted;
     }
+
+    private string Protect(string clearText)
+    {
+        if (string.IsNullOrEmpty(clearText)) return string.Empty;
+        var key = System.Security.Cryptography.SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(configuration["Jwt:Key"] ?? "IdealCreative.Integrations.Key.2026"));
+        using var aes = System.Security.Cryptography.Aes.Create();
+        aes.Key = key;
+        aes.GenerateIV();
+        using var encryptor = aes.CreateEncryptor();
+        var bytes = System.Text.Encoding.UTF8.GetBytes(clearText);
+        var encrypted = encryptor.TransformFinalBlock(bytes, 0, bytes.Length);
+        var result = new byte[aes.IV.Length + encrypted.Length];
+        Buffer.BlockCopy(aes.IV, 0, result, 0, aes.IV.Length);
+        Buffer.BlockCopy(encrypted, 0, result, aes.IV.Length, encrypted.Length);
+        return "enc:" + Convert.ToBase64String(result);
+    }
+
+    private string Unprotect(string? cipherText)
+    {
+        if (string.IsNullOrWhiteSpace(cipherText)) return string.Empty;
+        if (!cipherText.StartsWith("enc:"))
+        {
+            // Legacy DataProtector fallback
+            try { return protector.Unprotect(cipherText); } catch { return cipherText; }
+        }
+        try
+        {
+            var raw = Convert.FromBase64String(cipherText[4..]);
+            var key = System.Security.Cryptography.SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(configuration["Jwt:Key"] ?? "IdealCreative.Integrations.Key.2026"));
+            using var aes = System.Security.Cryptography.Aes.Create();
+            aes.Key = key;
+            var iv = new byte[16];
+            Buffer.BlockCopy(raw, 0, iv, 0, 16);
+            aes.IV = iv;
+            using var decryptor = aes.CreateDecryptor();
+            var decrypted = decryptor.TransformFinalBlock(raw, 16, raw.Length - 16);
+            return System.Text.Encoding.UTF8.GetString(decrypted);
+        }
+        catch
+        {
+            return string.Empty;
+        }
+    }
+
 
     private static IntegrationSettingsResponse ToView(IntegrationRuntimeSettings value, DateTimeOffset? updatedAt) => new()
     {
